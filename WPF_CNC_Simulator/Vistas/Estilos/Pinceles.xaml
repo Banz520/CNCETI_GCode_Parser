@@ -1,0 +1,10 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    
+    <!-- Aqui defino los pinceles de estilos con mis colores ya creados-->
+    <SolidColorBrush x:Key="PincelNegroMenusuperior" Color="{StaticResource ColorNegroMenusuperior}"/>
+    <SolidColorBrush x:Key="PincelGrisEditorGCode" Color="{StaticResource ColorGrisEditorGCode}"/>
+    <SolidColorBrush x:Key="PincelVerdeBotones" Color="{StaticResource ColorVerdeBotones}"/>
+    <SolidColorBrush x:Key="PincelBlancoTexto" Color="{StaticResource ColorBlancoTexto}"/>
+    
+</ResourceDictionary>

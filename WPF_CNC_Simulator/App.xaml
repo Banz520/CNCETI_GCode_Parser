@@ -1,0 +1,17 @@
+﻿<Application x:Class="WPF_CNC_Simulator.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:WPF_CNC_Simulator"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <!-- Aqui van la definicion y rutas a mi definiciones de estilos-->
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Vistas/Estilos/Colores.xaml"/>
+                <ResourceDictionary Source="Vistas/Estilos/Pinceles.xaml"/>
+                <ResourceDictionary Source="Vistas/Estilos/EstilosTextos.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+
+    </Application.Resources>
+</Application>
