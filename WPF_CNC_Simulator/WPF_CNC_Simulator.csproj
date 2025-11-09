@@ -8,4 +8,22 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="Vistas\Imagenes\export.png" />
+    <None Remove="Vistas\Imagenes\hamburger.png" />
+    <None Remove="Vistas\Imagenes\import.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Vistas\Imagenes\export.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Resource>
+    <Resource Include="Vistas\Imagenes\hamburger.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Resource>
+    <Resource Include="Vistas\Imagenes\import.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Resource>
+  </ItemGroup>
+
 </Project>

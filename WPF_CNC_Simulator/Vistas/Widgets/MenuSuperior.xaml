@@ -6,10 +6,22 @@
              xmlns:local="clr-namespace:WPF_CNC_Simulator.Vistas.Widgets"
              mc:Ignorable="d" 
              d:DesignHeight="90" d:DesignWidth="1280">
-    
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
-        
-        
-        
-    </StackPanel>
+
+    <Grid Background="{StaticResource PincelNegroMenusuperior}">
+        <Grid.ColumnDefinitions>
+            <!-- Puedes usar Width="Auto" para tamaño según contenido -->
+            <!-- o Width="*" para que se expanda proporcionalmente -->
+            <!-- o Width="250" para tamaño fijo en píxeles -->
+            <ColumnDefinition Width="0.2*"/>
+            <ColumnDefinition Width="0.2*"/>
+            <ColumnDefinition Width="0.2*"/>
+            <ColumnDefinition Width="0.4*"/>
+            
+            <!-- Espacio restante -->
+        </Grid.ColumnDefinitions>
+
+        <local:BotonConIcono Grid.Column="0" Titulo="Configuración y preferencias" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/hamburger.png"/>
+        <local:BotonConIcono Grid.Column="1" Titulo="Importar modelo" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/import.png"/>
+        <local:BotonConIcono Grid.Column="2" Titulo="Exportar código G" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/export.png"/>
+    </Grid>
 </UserControl>

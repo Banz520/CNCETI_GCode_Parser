@@ -1,0 +1,42 @@
+﻿<UserControl x:Class="WPF_CNC_Simulator.Vistas.Widgets.BotonConIcono"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:WPF_CNC_Simulator.Vistas.Widgets"
+             mc:Ignorable="d" 
+             x:Name="root"
+             d:DesignHeight="50" d:DesignWidth="246">
+
+    <Button 
+        HorizontalContentAlignment="Left" 
+        Background="{StaticResource PincelNegroMenusuperior}" 
+        Margin="0 0 0 0" 
+        BorderThickness="0">
+        
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+            </Grid.RowDefinitions>
+
+            <Image 
+                Grid.Column="0"
+                HorizontalAlignment="Left" 
+                VerticalAlignment="Center"
+                Margin="6,0,0,0"
+                Source="{Binding Icono,ElementName=root}"/>
+
+            <TextBlock 
+                Grid.Column="1"
+                Text="{Binding Titulo,ElementName=root}"
+                Margin="8,0,0,0"
+              />
+            
+        </Grid>
+    </Button>
+</UserControl>
