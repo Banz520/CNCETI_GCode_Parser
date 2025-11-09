@@ -33,7 +33,7 @@
             </Grid.ColumnDefinitions>
 
             <widgets:EditorGCode Grid.Row="0" Grid.Column="1"/>
-            <widgets:Simulador3d Grid.Row="0" Grid.Column="0"/>
+            <widgets:Simulador3d Grid.Row="0" Grid.Column="0" x:Name="Simulador3d"/>
         </Grid>
         
        

@@ -4,12 +4,29 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:WPF_CNC_Simulator.Vistas.Widgets"
+             xmlns:hx="http://helix-toolkit.org/wpf"
              mc:Ignorable="d" 
              d:DesignHeight="627" d:DesignWidth="854">
-    <Grid Background="{StaticResource PincelVerdeBotones}">
-        <TextBlock 
-            Text="Simulador 3D"
-            VerticalAlignment="Center"
-            HorizontalAlignment="Center"/>
+    <Grid Background="{StaticResource PincelGrisFondoSimulacion}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Viewport 3D de Helix Toolkit -->
+        <hx:HelixViewport3D x:Name="viewport" Grid.Row="0">
+            <!-- Luz predeterminada -->
+            <hx:DefaultLights/>
+
+            <!-- Sistema de coordenadas -->
+            <hx:CoordinateSystemVisual3D Visual3D.Transform="{Binding CoordinateSystemTransform}"/>
+        </hx:HelixViewport3D>
+
+        <!-- Panel de controles -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="10" HorizontalAlignment="Center">
+            <Button Content="Importar STL" Click="ImportarSTL_Click" Margin="5" Padding="10,5"/>
+            <Button Content="Reset Vista" Click="ResetVista_Click" Margin="5" Padding="10,5"/>
+            <Button Content="Mover CNC" Click="MoverCNC_Click" Margin="5" Padding="10,5"/>
+        </StackPanel>
     </Grid>
 </UserControl>

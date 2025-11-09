@@ -12,6 +12,18 @@
     <None Remove="Vistas\Imagenes\export.png" />
     <None Remove="Vistas\Imagenes\hamburger.png" />
     <None Remove="Vistas\Imagenes\import.png" />
+    <None Remove="Vistas\Modelos3D\cnceti.stl" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Vistas\Modelos3D\cnceti.stl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HelixToolkit" Version="2.27.3" />
+    <PackageReference Include="HelixToolkit.Wpf" Version="2.27.3" />
   </ItemGroup>
 
   <ItemGroup>

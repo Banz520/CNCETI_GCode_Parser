@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using WPF_CNC_Simulator.Vistas.Widgets;
 
 namespace WPF_CNC_Simulator
 {
@@ -19,6 +20,19 @@ namespace WPF_CNC_Simulator
         public MainWindow()
         {
             InitializeComponent();
+        }
+
+        // Ejemplo de cómo controlar los modelos desde otra parte de tu código
+        private void MoverMaquinaCNC()
+        {
+            // Mover la máquina CNC base
+            Simulador3d.MoverCNC(x: 2.0, y: 1.5, z: 0.3, rotacionZ: 30);
+        }
+
+        private void MoverPiezaImportada()
+        {
+            // Mover el modelo importado
+            Simulador3d.MoverModeloImportado(x: 1.0, y: -2.0, z: 0.5, rotacionX: 15);
         }
     }
 }

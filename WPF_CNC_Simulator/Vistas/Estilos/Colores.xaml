@@ -7,4 +7,5 @@
     <Color x:Key="ColorGrisEditorGCode">#212121</Color>
     <Color x:Key="ColorVerdeBotones">#22AC51</Color>
     <Color x:Key="ColorBlancoTexto">#FFFFFF</Color>
+    <Color x:Key="ColorGrisFondoSimulacion">#393938</Color>
 </ResourceDictionary>

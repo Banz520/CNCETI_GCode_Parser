@@ -6,5 +6,7 @@
     <SolidColorBrush x:Key="PincelGrisEditorGCode" Color="{StaticResource ColorGrisEditorGCode}"/>
     <SolidColorBrush x:Key="PincelVerdeBotones" Color="{StaticResource ColorVerdeBotones}"/>
     <SolidColorBrush x:Key="PincelBlancoTexto" Color="{StaticResource ColorBlancoTexto}"/>
+    <SolidColorBrush x:Key="PincelGrisFondoSimulacion" Color="{StaticResource ColorGrisFondoSimulacion}"/>
     
+
 </ResourceDictionary>
