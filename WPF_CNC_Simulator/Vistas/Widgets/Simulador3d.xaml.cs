@@ -138,7 +138,7 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                 modeloImportado.Content = modelo;
 
                 // Posición inicial del modelo importado (a la derecha del CNC)
-                var transform = new TranslateTransform3D(3, 0, 0);
+                var transform = new TranslateTransform3D(0, 0, 0);
                 modeloImportado.Transform = transform;
 
                 viewport.Children.Add(modeloImportado);

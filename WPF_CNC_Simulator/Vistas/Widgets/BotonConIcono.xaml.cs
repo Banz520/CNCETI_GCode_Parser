@@ -20,8 +20,32 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
     /// </summary>
     public partial class BotonConIcono : UserControl
     {
+        public BotonConIcono()
+        {
+            InitializeComponent();
+        }
 
 
+        // Definir el RoutedEvent
+        public static readonly RoutedEvent BotonClickEvent =
+            EventManager.RegisterRoutedEvent(
+                "BotonClick",
+                RoutingStrategy.Bubble,
+                typeof(RoutedEventHandler),
+                typeof(BotonConIcono));
+
+        // Evento para suscribirse desde XAML o código
+        public event RoutedEventHandler BotonClick
+        {
+            add { AddHandler(BotonClickEvent, value); }
+            remove { RemoveHandler(BotonClickEvent, value); }
+        }
+        // Manejar el click del botón interno
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            // Disparar nuestro RoutedEvent personalizado
+            RaiseEvent(new RoutedEventArgs(BotonClickEvent, this));
+        }
         public string Titulo
         {
             get { return (string)GetValue(TituloProperty); }
@@ -42,15 +66,7 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                 typeof(BotonConIcono),
                 new PropertyMetadata(null));
 
-        public RoutedEventHandler Click
-        {
-            get { return (RoutedEventHandler)GetValue(ClickProperty); }
-            set { SetValue(ClickProperty, value); }
-        }
-
-        public static readonly DependencyProperty ClickProperty =
-            DependencyProperty.Register("Click", typeof(RoutedEventHandler), typeof(BotonConIcono));
-
+        
         public ImageSource Icono
         {
             get => (ImageSource)GetValue(IconoProperty);
@@ -59,11 +75,7 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
 
 
 
-        public BotonConIcono()
-        {
-            InitializeComponent();
-        }
-
+       
         
     }
 }
