@@ -14,7 +14,7 @@
         </Grid.RowDefinitions>
         
         <!-- Viewport 3D de Helix Toolkit -->
-        <hx:HelixViewport3D x:Name="viewport" Grid.Row="0">
+        <hx:HelixViewport3D x:Name="viewport" Grid.Row="0" Panel.ZIndex="0">
             <!-- Luz predeterminada -->
             <hx:DefaultLights/>
 
@@ -22,7 +22,10 @@
             <hx:CoordinateSystemVisual3D Visual3D.Transform="{Binding CoordinateSystemTransform}"/>
         </hx:HelixViewport3D>
 
+        <local:BotonVerde Titulo="Iniciar Simulación de maquinado" Grid.Row="0" Panel.ZIndex="1" Width="284" Height="53" VerticalAlignment="Top" Margin="0 20 0 0"/>
+
         <!-- Panel de controles -->
+        <!-- TODO: debo pasar los metodos del click del importar stl a mi menusuperior, y estos deben de tener un onclick con binding creo-->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="10" HorizontalAlignment="Center">
             <Button Content="Importar STL" Click="ImportarSTL_Click" Margin="5" Padding="10,5"/>
             <Button Content="Reset Vista" Click="ResetVista_Click" Margin="5" Padding="10,5"/>

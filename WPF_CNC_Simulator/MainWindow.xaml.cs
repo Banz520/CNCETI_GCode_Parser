@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using WPF_CNC_Simulator.Views;
 using WPF_CNC_Simulator.Vistas.Widgets;
 
 namespace WPF_CNC_Simulator
@@ -21,7 +22,11 @@ namespace WPF_CNC_Simulator
         {
             InitializeComponent();
         }
-
+        private void OpenSlicerWindow_Click(object sender, RoutedEventArgs e)
+        {
+            var slicerWindow = new SlicerWindow();
+            slicerWindow.ShowDialog(); // O .Show() si quieres que no sea modal
+        }
         // Ejemplo de cómo controlar los modelos desde otra parte de tu código
         private void MoverMaquinaCNC()
         {

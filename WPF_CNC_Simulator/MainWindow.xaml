@@ -21,7 +21,12 @@
         </Grid.ColumnDefinitions>
 
         <widgets:MenuSuperior Grid.Row="0" Grid.Column="0"/>
-        
+        <Button Content="🔄 Slicer STL → G-code" 
+            Click="OpenSlicerWindow_Click"
+            Width="180"
+            Height="35"
+                />
+
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
@@ -32,6 +37,7 @@
                 <ColumnDefinition Width="0.33*"/>
             </Grid.ColumnDefinitions>
 
+            
             <widgets:EditorGCode Grid.Row="0" Grid.Column="1"/>
             <widgets:Simulador3d Grid.Row="0" Grid.Column="0" x:Name="Simulador3d"/>
         </Grid>

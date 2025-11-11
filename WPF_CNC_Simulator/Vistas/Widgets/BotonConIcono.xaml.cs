@@ -54,5 +54,10 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         {
             InitializeComponent();
         }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }

@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <PackageReference Include="HelixToolkit" Version="2.27.3" />
     <PackageReference Include="HelixToolkit.Wpf" Version="2.27.3" />
   </ItemGroup>
@@ -37,5 +38,13 @@
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Resource>
   </ItemGroup>
+
+	<ItemGroup>
+		<!-- Copiar toda la carpeta Slic3r al directorio de salida -->
+		<None Include="Slic3r\**\*.*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Link>Slic3r\%(RecursiveDir)%(Filename)%(Extension)</Link>
+		</None>
+	</ItemGroup>
 
 </Project>

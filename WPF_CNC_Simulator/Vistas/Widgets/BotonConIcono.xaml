@@ -6,13 +6,16 @@
              xmlns:local="clr-namespace:WPF_CNC_Simulator.Vistas.Widgets"
              mc:Ignorable="d" 
              x:Name="root"
-             d:DesignHeight="50" d:DesignWidth="246">
+             d:DesignHeight="50" d:DesignWidth="246"
+             >
 
     <Button 
         HorizontalContentAlignment="Left" 
         Background="{StaticResource PincelNegroMenusuperior}" 
         Margin="0 0 0 0" 
-        BorderThickness="0">
+        BorderThickness="0"
+        >
+        <!-- Click ="{Binding }"> -->
         
         <Grid>
             <Grid.ColumnDefinitions>
