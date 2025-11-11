@@ -24,5 +24,23 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         {
             InitializeComponent();
         }
+
+        private void BtnImportar_Click(object sender, RoutedEventArgs e)
+        {
+            var mainWindow = Window.GetWindow(this) as MainWindow;
+            mainWindow?.ImportarModeloSTL();
+        }
+
+        private void BtnExportar_Click(object sender, RoutedEventArgs e)
+        {
+            var mainWindow = Window.GetWindow(this) as MainWindow;
+            mainWindow?.ExportarCodigoG();
+        }
+
+        private void BtnConfiguracion_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show("Funcionalidad de configuración en desarrollo",
+                "Configuración", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 }

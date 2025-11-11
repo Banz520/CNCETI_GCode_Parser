@@ -50,6 +50,9 @@ namespace WPF_CNC_Simulator.Services
 
                 var arguments = BuildArguments(stlFilePath, outputGcodePath);
 
+                progressCallback?.Invoke($"Ejecutando: {_slic3rPath}");
+                progressCallback?.Invoke($"Argumentos: {arguments}");
+
                 var processStartInfo = new ProcessStartInfo
                 {
                     FileName = _slic3rPath,
@@ -63,12 +66,15 @@ namespace WPF_CNC_Simulator.Services
 
                 using (var process = new Process { StartInfo = processStartInfo })
                 {
+                    var outputBuilder = new System.Text.StringBuilder();
+                    var errorBuilder = new System.Text.StringBuilder();
+
                     process.OutputDataReceived += (sender, e) =>
                     {
                         if (!string.IsNullOrEmpty(e.Data))
                         {
                             progressCallback?.Invoke(e.Data);
-                            result.Output += e.Data + Environment.NewLine;
+                            outputBuilder.AppendLine(e.Data);
                         }
                     };
 
@@ -76,7 +82,8 @@ namespace WPF_CNC_Simulator.Services
                     {
                         if (!string.IsNullOrEmpty(e.Data))
                         {
-                            result.ErrorOutput += e.Data + Environment.NewLine;
+                            progressCallback?.Invoke($"[ERROR] {e.Data}");
+                            errorBuilder.AppendLine(e.Data);
                         }
                     };
 
@@ -85,21 +92,50 @@ namespace WPF_CNC_Simulator.Services
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
 
-                    await Task.Run(() => process.WaitForExit());
+                    // Esperar con timeout de 5 minutos
+                    var timeout = TimeSpan.FromMinutes(5);
+                    var completed = await Task.Run(() => process.WaitForExit((int)timeout.TotalMilliseconds));
+
+                    if (!completed)
+                    {
+                        process.Kill();
+                        result.Success = false;
+                        result.ErrorMessage = "El proceso excedió el tiempo límite de 5 minutos";
+                        return result;
+                    }
 
                     result.ProcessingTime = DateTime.Now - startTime;
                     result.ExitCode = process.ExitCode;
+                    result.Output = outputBuilder.ToString();
+                    result.ErrorOutput = errorBuilder.ToString();
 
-                    if (process.ExitCode == 0 && File.Exists(outputGcodePath))
+                    progressCallback?.Invoke($"Proceso terminado con código: {process.ExitCode}");
+
+                    if (process.ExitCode == 0)
                     {
-                        result.Success = true;
-                        result.OutputFilePath = outputGcodePath;
-                        result.FileSize = new FileInfo(outputGcodePath).Length;
+                        // Verificar si el archivo fue creado
+                        if (File.Exists(outputGcodePath))
+                        {
+                            result.Success = true;
+                            result.OutputFilePath = outputGcodePath;
+                            result.FileSize = new FileInfo(outputGcodePath).Length;
+                            progressCallback?.Invoke($"✓ Archivo generado: {outputGcodePath}");
+                        }
+                        else
+                        {
+                            result.Success = false;
+                            result.ErrorMessage = "El proceso terminó exitosamente pero no se generó el archivo G-code";
+                        }
                     }
                     else
                     {
                         result.Success = false;
                         result.ErrorMessage = $"Slic3r falló con código de salida: {process.ExitCode}";
+
+                        if (!string.IsNullOrEmpty(result.ErrorOutput))
+                        {
+                            result.ErrorMessage += $"\n\nDetalles del error:\n{result.ErrorOutput}";
+                        }
                     }
                 }
             }
@@ -107,6 +143,8 @@ namespace WPF_CNC_Simulator.Services
             {
                 result.Success = false;
                 result.ErrorMessage = $"Excepción: {ex.Message}";
+                result.ErrorOutput = ex.StackTrace;
+                progressCallback?.Invoke($"[EXCEPCIÓN] {ex.Message}");
             }
 
             return result;
@@ -126,6 +164,7 @@ namespace WPF_CNC_Simulator.Services
             try
             {
                 File.WriteAllText(tempConfigPath, settings.ToIniFormat());
+                progressCallback?.Invoke($"Configuración temporal creada: {tempConfigPath}");
 
                 var tempService = new SlicerService(_slic3rPath, tempConfigPath);
                 return await tempService.SliceSTLAsync(stlFilePath, outputGcodePath, progressCallback);
@@ -133,7 +172,13 @@ namespace WPF_CNC_Simulator.Services
             finally
             {
                 if (File.Exists(tempConfigPath))
-                    File.Delete(tempConfigPath);
+                {
+                    try
+                    {
+                        File.Delete(tempConfigPath);
+                    }
+                    catch { /* Ignorar errores al eliminar archivo temporal */ }
+                }
             }
         }
 
@@ -145,12 +190,15 @@ namespace WPF_CNC_Simulator.Services
             {
                 args += $" --load \"{_configPath}\"";
             }
-
-            args += " --layer-height 0.2";
-            args += " --fill-density 20%";
-            args += " --perimeters 3";
-            args += " --top-solid-layers 3";
-            args += " --bottom-solid-layers 3";
+            else
+            {
+                // Configuración por defecto
+                args += " --layer-height 0.2";
+                args += " --fill-density 20%";
+                args += " --perimeters 3";
+                args += " --top-solid-layers 3";
+                args += " --bottom-solid-layers 3";
+            }
 
             return args;
         }

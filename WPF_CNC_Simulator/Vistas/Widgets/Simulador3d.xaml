@@ -27,8 +27,7 @@
         <!-- Panel de controles -->
         <!-- TODO: debo pasar los metodos del click del importar stl a mi menusuperior, y estos deben de tener un onclick con binding creo-->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="10" HorizontalAlignment="Center">
-            <Button Content="Importar STL" Click="ImportarSTL_Click" Margin="5" Padding="10,5"/>
-            <Button Content="Reset Vista" Click="ResetVista_Click" Margin="5" Padding="10,5"/>
+            
             <Button Content="Mover CNC" Click="MoverCNC_Click" Margin="5" Padding="10,5"/>
         </StackPanel>
     </Grid>

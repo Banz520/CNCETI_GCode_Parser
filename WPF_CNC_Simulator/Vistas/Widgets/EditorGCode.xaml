@@ -30,12 +30,40 @@
             TextChanged="txtGCode_TextChanged" />
 
         <!-- Botón para aplicar cambios -->
+        <Button
+            Grid.Row="1"
+            Margin="72 20 72 20"
+            HorizontalAlignment="Stretch"
+            Content="Guardar Código G"
+            Background="{StaticResource PincelVerdeBotones}"
+            Foreground="{StaticResource PincelBlancoTexto}"
+            FontSize="14"
+            FontWeight="SemiBold"
+            Height="40"
+            BorderThickness="0"
+            Click="BotonAplicar_Click">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border 
+                        Background="{TemplateBinding Background}" 
+                        BorderBrush="{TemplateBinding BorderBrush}" 
+                        BorderThickness="0" 
+                        CornerRadius="8">
+                        <ContentPresenter 
+                            HorizontalAlignment="Center" 
+                            VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <!-- Botón para aplicar cambios 
         <local:BotonVerde
             Grid.Row="1"
             Margin="72 20 72 20"
             HorizontalAlignment="Stretch"
             Titulo="Aplicar cambios"
-             />
+             /> -->
 
     </Grid>
 </UserControl>

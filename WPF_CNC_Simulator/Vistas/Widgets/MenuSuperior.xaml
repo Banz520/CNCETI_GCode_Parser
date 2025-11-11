@@ -19,9 +19,91 @@
             
             <!-- Espacio restante -->
         </Grid.ColumnDefinitions>
+        
+        <!-- Mis botones
+        <local:BotonConIcono Grid.Column="0" Click="BtnConfiguracion_Click" Titulo="Configuración y preferencias" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/hamburger.png"/>
+        <local:BotonConIcono Grid.Column="1" Click="BtnImportar_Click" Titulo="Importar modelo" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/import.png"/>
+        <local:BotonConIcono Grid.Column="2" Click="BtnExportar_Click" Titulo="Exportar código G" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/export.png"/>
+        -->
+        <!-- Botón Configuración -->
+        <Button Grid.Column="0" 
+                HorizontalContentAlignment="Left" 
+                Background="{StaticResource PincelNegroMenusuperior}" 
+                BorderThickness="0"
+                Click="BtnConfiguracion_Click">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-        <local:BotonConIcono Grid.Column="0" Titulo="Configuración y preferencias" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/hamburger.png"/>
-        <local:BotonConIcono Grid.Column="1" Titulo="Importar modelo" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/import.png"/>
-        <local:BotonConIcono Grid.Column="2" Titulo="Exportar código G" Icono="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/export.png"/>
+                <Image Grid.Column="0"
+                       HorizontalAlignment="Left" 
+                       VerticalAlignment="Center"
+                       Margin="6,0,0,0"
+                       Source="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/hamburger.png"
+                       Width="24"
+                       Height="24"/>
+
+                <TextBlock Grid.Column="1"
+                           Text="Configuración y preferencias"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Button>
+
+        <!-- Botón Importar -->
+        <Button Grid.Column="1" 
+                HorizontalContentAlignment="Left" 
+                Background="{StaticResource PincelNegroMenusuperior}" 
+                BorderThickness="0"
+                Click="BtnImportar_Click">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Image Grid.Column="0"
+                       HorizontalAlignment="Left" 
+                       VerticalAlignment="Center"
+                       Margin="6,0,0,0"
+                       Source="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/import.png"
+                       Width="24"
+                       Height="24"/>
+
+                <TextBlock Grid.Column="1"
+                           Text="Importar modelo STL"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Button>
+
+        <!-- Botón Exportar -->
+        <Button Grid.Column="2" 
+                HorizontalContentAlignment="Left" 
+                Background="{StaticResource PincelNegroMenusuperior}" 
+                BorderThickness="0"
+                Click="BtnExportar_Click">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Image Grid.Column="0"
+                       HorizontalAlignment="Left" 
+                       VerticalAlignment="Center"
+                       Margin="6,0,0,0"
+                       Source="pack://application:,,,/WPF_CNC_Simulator;component/Vistas/Imagenes/export.png"
+                       Width="24"
+                       Height="24"/>
+
+                <TextBlock Grid.Column="1"
+                           Text="Exportar código G"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Button>
     </Grid>
 </UserControl>

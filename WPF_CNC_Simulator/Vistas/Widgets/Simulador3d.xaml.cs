@@ -1,23 +1,11 @@
 ﻿using HelixToolkit.Wpf;
 using Microsoft.Win32;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using System.Xml;
-using IO = System.IO;
 
 namespace WPF_CNC_Simulator.Vistas.Widgets
 {
@@ -28,7 +16,7 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
     {
         private Model3DGroup modeloCNC;
         private ModelVisual3D modeloImportado;
-        //private string rutaModeloCNC = @"..\..\Vistas\Modelos3D\cncceti.stl";//@"Modelos3D\cnceti.stl"; // Ruta relativa
+        private string rutaModeloCNC = @"Vistas\Modelos3D\cnceti.stl";
 
         public Simulador3d()
         {
@@ -49,17 +37,13 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             };
         }
 
-        // 1. Cargar modelo CNC inicial
-        private string rutaModeloCNC = @"Vistas\Modelos3D\cnceti.stl";
-
         private void CargarModeloCNC()
         {
             try
             {
                 string directorioBase = AppDomain.CurrentDomain.BaseDirectory;
-                string rutaCompleta = IO.Path.Combine(directorioBase, rutaModeloCNC);
+                string rutaCompleta = Path.Combine(directorioBase, rutaModeloCNC);
 
-                // Debug: Verificar ruta
                 Console.WriteLine($"Buscando modelo en: {rutaCompleta}");
                 Console.WriteLine($"Existe archivo: {File.Exists(rutaCompleta)}");
 
@@ -78,12 +62,12 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                     }
                 }
 
-                MessageBox.Show($"Modelo CNC no encontrado en:\n{rutaCompleta}");
+                Console.WriteLine($"Modelo CNC no encontrado en: {rutaCompleta}");
                 CrearModeloEjemplo();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error cargando modelo CNC: {ex.Message}");
+                Console.WriteLine($"Error cargando modelo CNC: {ex.Message}");
                 CrearModeloEjemplo();
             }
         }
@@ -106,7 +90,9 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             viewport.Children.Add(visual);
         }
 
-        // 2. Mover el modelo CNC base
+        /// <summary>
+        /// Mover el modelo CNC base
+        /// </summary>
         public void MoverCNC(double x, double y, double z, double rotacionX = 0, double rotacionY = 0, double rotacionZ = 0)
         {
             if (modeloCNC != null)
@@ -125,44 +111,51 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             }
         }
 
-        // 3. Importar modelos STL adicionales
-        private void ImportarSTL_Click(object sender, RoutedEventArgs e)
-        {
-            var openFileDialog = new OpenFileDialog
-            {
-                Filter = "Archivos STL (*.stl)|*.stl",
-                Title = "Importar modelo STL"
-            };
-
-            if (openFileDialog.ShowDialog() == true)
-            {
-                CargarModeloImportado(openFileDialog.FileName);
-            }
-        }
-
-        private void CargarModeloImportado(string rutaArchivo)
+        /// <summary>
+        /// Importar modelos STL adicionales (método público para llamar desde MainWindow)
+        /// </summary>
+        public void CargarModeloImportado(string rutaArchivo)
         {
             try
             {
+                if (!File.Exists(rutaArchivo))
+                {
+                    MessageBox.Show($"Archivo no encontrado: {rutaArchivo}",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                // Eliminar modelo anterior si existe
+                if (modeloImportado != null)
+                {
+                    viewport.Children.Remove(modeloImportado);
+                }
+
                 var importador = new ModelImporter();
                 var modelo = importador.Load(rutaArchivo);
 
                 modeloImportado = new ModelVisual3D();
                 modeloImportado.Content = modelo;
 
-                // Posición inicial del modelo importado
-                var transform = new TranslateTransform3D(3, 0, 0); // A la derecha del CNC
+                // Posición inicial del modelo importado (a la derecha del CNC)
+                var transform = new TranslateTransform3D(3, 0, 0);
                 modeloImportado.Transform = transform;
 
                 viewport.Children.Add(modeloImportado);
+
+                MessageBox.Show($"Modelo STL cargado correctamente:\n{Path.GetFileName(rutaArchivo)}",
+                    "Importación Exitosa", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error cargando modelo STL: {ex.Message}");
+                MessageBox.Show($"Error cargando modelo STL:\n{ex.Message}\n\n{ex.StackTrace}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        // 4. Alterar posición y rotación del modelo importado
+        /// <summary>
+        /// Alterar posición y rotación del modelo importado
+        /// </summary>
         public void MoverModeloImportado(double x, double y, double z, double rotacionX = 0, double rotacionY = 0, double rotacionZ = 0)
         {
             if (modeloImportado != null)
@@ -181,7 +174,21 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             }
         }
 
-        // Métodos para los botones
+        // Métodos para los botones del control
+        private void ImportarSTL_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Filter = "Archivos STL (*.stl)|*.stl|Todos los archivos (*.*)|*.*",
+                Title = "Importar modelo STL"
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                CargarModeloImportado(openFileDialog.FileName);
+            }
+        }
+
         private void ResetVista_Click(object sender, RoutedEventArgs e)
         {
             ConfigurarViewport();
@@ -193,6 +200,4 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             MoverCNC(1, 0.5, 0.2, 0, 45, 0);
         }
     }
-        
-    
 }

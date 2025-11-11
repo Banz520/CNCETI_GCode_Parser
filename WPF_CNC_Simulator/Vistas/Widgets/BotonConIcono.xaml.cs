@@ -42,6 +42,15 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                 typeof(BotonConIcono),
                 new PropertyMetadata(null));
 
+        public RoutedEventHandler Click
+        {
+            get { return (RoutedEventHandler)GetValue(ClickProperty); }
+            set { SetValue(ClickProperty, value); }
+        }
+
+        public static readonly DependencyProperty ClickProperty =
+            DependencyProperty.Register("Click", typeof(RoutedEventHandler), typeof(BotonConIcono));
+
         public ImageSource Icono
         {
             get => (ImageSource)GetValue(IconoProperty);
@@ -55,9 +64,6 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             InitializeComponent();
         }
 
-        private void Button_Click(object sender, RoutedEventArgs e)
-        {
-
-        }
+        
     }
 }
