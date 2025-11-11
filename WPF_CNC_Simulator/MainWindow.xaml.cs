@@ -3,8 +3,7 @@ using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 using WPF_CNC_Simulator.Services;
-using WPF_CNC_Simulator.Views;
-using WPF_CNC_Simulator.Vistas.Widgets;
+
 
 namespace WPF_CNC_Simulator
 {
@@ -34,7 +33,6 @@ namespace WPF_CNC_Simulator
                 }
                 else
                 {
-                    // Intentar buscar en otras ubicaciones comunes
                     var alternativePaths = new[]
                     {
                         Path.Combine(baseDir, "Slic3r", "slic3r-console.exe"),
@@ -61,11 +59,6 @@ namespace WPF_CNC_Simulator
             }
         }
 
-        private void OpenSlicerWindow_Click(object sender, RoutedEventArgs e)
-        {
-            var slicerWindow = new SlicerWindow();
-            slicerWindow.ShowDialog();
-        }
 
         /// <summary>
         /// Importar modelo STL desde el menú superior
@@ -75,7 +68,7 @@ namespace WPF_CNC_Simulator
             var openFileDialog = new OpenFileDialog
             {
                 Filter = "Archivos STL (*.stl)|*.stl|Todos los archivos (*.*)|*.*",
-                Title = "Importar modelo STL"
+                Title = "Importar modelo STL para fresado CNC"
             };
 
             if (openFileDialog.ShowDialog() == true)
@@ -87,7 +80,13 @@ namespace WPF_CNC_Simulator
 
                     // Preguntar si desea generar G-code
                     var resultado = MessageBox.Show(
-                        "Modelo STL cargado correctamente.\n\n¿Desea generar el código G ahora?",
+                        "Modelo STL cargado correctamente.\n\n" +
+                        "¿Desea generar el código G-code para fresadora CNC?\n\n" +
+                        "Configuración:\n" +
+                        "• Área: 300x300x150mm\n" +
+                        "• Fresa: Ø5mm\n" +
+                        "• Husillo: 8000 RPM\n" +
+                        "• Material: Madera",
                         "Modelo Importado",
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Question);
@@ -124,14 +123,18 @@ namespace WPF_CNC_Simulator
                 var saveDialog = new SaveFileDialog
                 {
                     Filter = "Archivos G-code (*.gcode)|*.gcode|Archivos NC (*.nc)|*.nc|Todos los archivos (*.*)|*.*",
-                    Title = "Exportar Código G",
-                    FileName = "codigo_g.gcode"
+                    Title = "Exportar Código G para Fresadora CNC",
+                    FileName = "fresado_cnc.gcode"
                 };
 
                 if (saveDialog.ShowDialog() == true)
                 {
                     File.WriteAllText(saveDialog.FileName, codigoG, System.Text.Encoding.UTF8);
-                    MessageBox.Show($"Código G exportado correctamente a:\n{saveDialog.FileName}",
+                    MessageBox.Show($"Código G exportado correctamente a:\n{saveDialog.FileName}\n\n" +
+                        "El código está optimizado para:\n" +
+                        "• Fresadora CNC de 3 ejes\n" +
+                        "• Fresa Ø5mm\n" +
+                        "• Corte de madera",
                         "Éxito", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
@@ -143,7 +146,7 @@ namespace WPF_CNC_Simulator
         }
 
         /// <summary>
-        /// Generar G-code desde un archivo STL
+        /// Generar G-code desde un archivo STL con configuración para fresadora CNC
         /// </summary>
         private async void GenerarGCodeDesdeSTL(string stlPath)
         {
@@ -157,47 +160,76 @@ namespace WPF_CNC_Simulator
 
             try
             {
-                // Generar ruta de salida
                 var outputPath = Path.ChangeExtension(stlPath, ".gcode");
 
                 // Crear ventana de progreso
                 var progressWindow = new Window
                 {
-                    Title = "Generando G-code",
-                    Width = 400,
-                    Height = 200,
+                    Title = "Generando G-code para Fresadora CNC",
+                    Width = 600,
+                    Height = 400,
                     WindowStartupLocation = WindowStartupLocation.CenterOwner,
                     Owner = this,
                     ResizeMode = ResizeMode.NoResize
                 };
 
+                var scrollViewer = new System.Windows.Controls.ScrollViewer
+                {
+                    VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
+                };
+
                 var progressText = new System.Windows.Controls.TextBlock
                 {
-                    Text = "Iniciando conversión...",
+                    Text = "Iniciando conversión STL → G-code...\n",
                     Margin = new Thickness(20),
-                    TextWrapping = TextWrapping.Wrap
+                    TextWrapping = TextWrapping.Wrap,
+                    FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                    FontSize = 11
                 };
 
-                progressWindow.Content = progressText;
+                scrollViewer.Content = progressText;
+                progressWindow.Content = scrollViewer;
                 progressWindow.Show();
 
-                // Configuración personalizada
-                var settings = new SlicerSettings
+                // Configuración específica para fresadora CNC
+                var settings = new CNCMillingSettings
                 {
-                    LayerHeight = 0.2,
-                    FillDensity = 20,
-                    Perimeters = 3,
-                    PrintSpeed = 60,
-                    ExtruderTemperature = 200,
-                    BedTemperature = 60
+                    // Parámetros de la máquina
+                    WorkAreaX = 300.0,
+                    WorkAreaY = 300.0,
+                    WorkAreaZ = 150.0,
+                    StepResolution = 0.1,
+
+                    // Herramienta
+                    ToolDiameter = 5.0,
+                    MaxSpindleSpeed = 10000,
+                    WorkingSpindleSpeed = 8000,
+
+                    // Parámetros de corte para madera
+                    CuttingDepth = 0.5,            // 0.5mm por pasada
+                    CuttingFeedrate = 1500.0,      // 1500 mm/min velocidad de corte
+                    PlungeFeedrate = 500.0,        // 500 mm/min penetración
+                    RapidFeedrate = 3000.0,        // 3000 mm/min movimientos rápidos
+
+                    // Mecanizado
+                    Perimeters = 1,                // Un solo contorno
+                    FillDensity = 10,              // 10% relleno
+                    FillPattern = "rectilinear",   // Patrón rectilíneo
+                    SafeHeight = 50.0,             // 50mm altura segura
+
+                    Material = "Madera"
                 };
 
-                // Ejecutar slicing
+                // Ejecutar slicing con configuración CNC
                 var result = await _slicerService.SliceWithCustomSettings(
                     stlPath,
                     outputPath,
                     settings,
-                    progress => Dispatcher.Invoke(() => progressText.Text += "\n" + progress)
+                    progress => Dispatcher.Invoke(() =>
+                    {
+                        progressText.Text += progress + "\n";
+                        scrollViewer.ScrollToEnd();
+                    })
                 );
 
                 progressWindow.Close();
@@ -208,11 +240,24 @@ namespace WPF_CNC_Simulator
                     EditorGCode.CargarArchivo(result.OutputFilePath);
 
                     MessageBox.Show(
-                        $"✅ G-code generado exitosamente\n\n" +
+                        $"✅ G-code generado exitosamente para fresadora CNC\n\n" +
+                        $"═══════════════════════════════════════\n" +
+                        $"ESPECIFICACIONES:\n" +
+                        $"═══════════════════════════════════════\n" +
                         $"Archivo: {Path.GetFileName(result.OutputFilePath)}\n" +
                         $"Tamaño: {result.FileSize / 1024:F2} KB\n" +
-                        $"Tiempo: {result.ProcessingTime.TotalSeconds:F2} segundos",
-                        "Conversión Exitosa",
+                        $"Tiempo: {result.ProcessingTime.TotalSeconds:F2} segundos\n\n" +
+                        $"CONFIGURACIÓN CNC:\n" +
+                        $"═══════════════════════════════════════\n" +
+                        $"• Área de trabajo: 300x300x150mm\n" +
+                        $"• Herramienta: Fresa Ø5mm\n" +
+                        $"• Velocidad husillo: 8000 RPM\n" +
+                        $"• Profundidad corte: 0.5mm/pasada\n" +
+                        $"• Velocidad corte: 1500 mm/min\n" +
+                        $"• Velocidad rápida: 3000 mm/min\n" +
+                        $"• Material: Madera\n" +
+                        $"• Precisión: 0.1mm/paso",
+                        "Conversión Exitosa - Fresadora CNC",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
                 }

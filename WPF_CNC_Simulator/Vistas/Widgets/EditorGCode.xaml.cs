@@ -35,7 +35,7 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         {
             try
             {
-                // Definición personalizada del resaltado G-code
+                // Definición corregida sin caracteres problemáticos en regex
                 string xshd = @"<?xml version=""1.0""?>
 <SyntaxDefinition name=""GCode"" extensions="".gcode;.nc"" xmlns=""http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008"">
   <Color name=""Command"" foreground=""#7FFF00"" fontWeight=""bold""/>
@@ -44,9 +44,16 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
   <Color name=""Comment"" foreground=""#808080"" fontStyle=""italic""/>
   
   <RuleSet ignoreCase=""true"">
+    <!-- Comentarios con punto y coma -->
     <Span color=""Comment"" begin="";"" />
-    <Span color=""Comment"" begin=""("" end="")""/>
     
+    <!-- Comentarios entre paréntesis - CORREGIDO -->
+    <Span color=""Comment"">
+      <Begin>\(</Begin>
+      <End>\)</End>
+    </Span>
+    
+    <!-- Comandos G específicos -->
     <Keywords color=""Command"">
       <Word>G0</Word>
       <Word>G1</Word>
@@ -62,6 +69,10 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
       <Word>G90</Word>
       <Word>G91</Word>
       <Word>G92</Word>
+    </Keywords>
+    
+    <!-- Comandos M específicos -->
+    <Keywords color=""Command"">
       <Word>M0</Word>
       <Word>M1</Word>
       <Word>M2</Word>
@@ -76,17 +87,24 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
       <Word>M190</Word>
     </Keywords>
     
-    <Rule color=""Command"">
-      \b[GM]\d+\b
-    </Rule>
+    <!-- Ejes y parámetros -->
+    <Keywords color=""Axis"">
+      <Word>X</Word>
+      <Word>Y</Word>
+      <Word>Z</Word>
+      <Word>E</Word>
+      <Word>F</Word>
+      <Word>I</Word>
+      <Word>J</Word>
+      <Word>K</Word>
+      <Word>S</Word>
+    </Keywords>
     
-    <Rule color=""Axis"">
-      \b[XYZIJKEF]\b
-    </Rule>
+    <!-- Cualquier comando G/M con número -->
+    <Rule color=""Command"">[GM]\d+</Rule>
     
-    <Rule color=""Value"">
-      [+-]?\d+\.?\d*
-    </Rule>
+    <!-- Valores numéricos -->
+    <Rule color=""Value"">[+-]?\d+\.?\d*</Rule>
   </RuleSet>
 </SyntaxDefinition>";
 
@@ -98,15 +116,14 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error configurando resaltado de sintaxis: {ex.Message}",
-                    "Advertencia", MessageBoxButton.OK, MessageBoxImage.Warning);
+                // Si falla el highlighting, el editor sigue funcionando sin colores
+                Console.WriteLine($"Error configurando resaltado de sintaxis: {ex.Message}");
             }
         }
 
         private void txtGCode_TextChanged(object sender, EventArgs e)
         {
             // Evento que se dispara cuando cambia el texto
-            // Puedes agregar validación o procesamiento aquí si lo necesitas
         }
 
         private void BotonAplicar_Click(object sender, RoutedEventArgs e)
@@ -133,7 +150,6 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                     MessageBox.Show($"Código G guardado correctamente en:\n{saveDialog.FileName}",
                         "Éxito", MessageBoxButton.OK, MessageBoxImage.Information);
 
-                    // Disparar evento
                     GCodeAplicado?.Invoke(this, saveDialog.FileName);
                 }
             }
