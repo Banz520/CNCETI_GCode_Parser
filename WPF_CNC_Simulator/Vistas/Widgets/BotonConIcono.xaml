@@ -9,13 +9,46 @@
              d:DesignHeight="50" d:DesignWidth="246"
              >
 
+    
+    
     <Button 
-        HorizontalContentAlignment="Left" 
-        Background="{StaticResource PincelNegroMenusuperior}" 
-        Margin="0 0 0 0" 
-        BorderThickness="0"
+     
+        Margin="0" 
         Click="Button_Click"
         >
+
+
+        <Button.Style>
+            <Style TargetType="{x:Type Button}">
+                <Setter Property="Background" Value="{StaticResource PincelNegroMenusuperior}"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Button}">
+                            <Border 
+                                x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="0">
+                                <ContentPresenter 
+                                    HorizontalAlignment="Left" 
+                                    VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource PincelGrisEditorGCode}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Button.Style>
+
+
+
+
+
+
         <!-- Click ="{Binding }"> -->
         
         <Grid>

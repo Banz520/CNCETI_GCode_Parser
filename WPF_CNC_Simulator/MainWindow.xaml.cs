@@ -18,10 +18,82 @@ namespace WPF_CNC_Simulator
         {
             InitializeComponent();
             InicializarSlicerService();
+            ConfigurarControles();
         }
 
 
+        private void ConfigurarControles()
+        {
+            try
+            {
+                // Configurar la referencia del simulador en el control de propiedades
+                if (Simulador3d != null)
+                {
+                    // Asignar la referencia del simulador al control de propiedades interno
+                    Simulador3d.ConfigurarControlPropiedades();
 
+                    // Suscribirse a eventos si es necesario
+                    Simulador3d.PropiedadCambiada += OnPropiedadPiezaCambiada;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error configurando controles: {ex.Message}");
+            }
+        }
+
+        private void OnPropiedadPiezaCambiada(string propiedad, double valor)
+        {
+            // Opcional: Puedes agregar lógica adicional aquí cuando cambien las propiedades
+            Console.WriteLine($"Propiedad {propiedad} cambiada a: {valor}");
+        }
+
+        /// <summary>
+        /// Importar modelo STL desde el menú superior
+        /// </summary>
+        public void ImportarModeloSTL()
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Filter = "Archivos STL (*.stl)|*.stl|Todos los archivos (*.*)|*.*",
+                Title = "Importar modelo STL para fresado CNC"
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    // Cargar en el simulador 3D
+                    Simulador3d.CargarModeloImportado(openFileDialog.FileName);
+
+                    // Actualizar el control de propiedades después de cargar el modelo
+                    Simulador3d.ActualizarControlPropiedades();
+
+                    // Preguntar si desea generar G-code
+                    var resultado = MessageBox.Show(
+                        "Modelo STL cargado correctamente.\n\n" +
+                        "¿Desea generar el código G-code para fresadora CNC?\n\n" +
+                        "Configuración:\n" +
+                        "• Área: 300x300x150mm\n" +
+                        "• Fresa: Ø5mm\n" +
+                        "• Husillo: 8000 RPM\n" +
+                        "• Material: Madera",
+                        "Modelo Importado",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (resultado == MessageBoxResult.Yes)
+                    {
+                        GenerarGCodeDesdeSTL(openFileDialog.FileName);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error al importar modelo:\n{ex.Message}",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
         private void InicializarSlicerService()
         {
             try
@@ -61,7 +133,7 @@ namespace WPF_CNC_Simulator
             }
         }
 
-
+        /*
         /// <summary>
         /// Importar modelo STL desde el menú superior
         /// </summary>
@@ -105,6 +177,7 @@ namespace WPF_CNC_Simulator
                 }
             }
         }
+        */
 
         /// <summary>
         /// Exportar código G desde el menú superior

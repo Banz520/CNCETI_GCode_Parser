@@ -32,7 +32,18 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         private const string RUTA_MODELO_EJE_Y = @"Vistas\Modelos3D\cnc_eje_y.stl";
         private const string RUTA_MODELO_EJE_X = @"Vistas\Modelos3D\cnc_eje_x.stl";
 
-        
+        // Agrega estas variables privadas
+        private ModelVisual3D mallaMetrica;
+        private const double TAMANO_MALLA = 600;
+        private const double ESPACIO_LINEAS = 5.0;
+
+        private ModelVisual3D modeloImportado;
+        private double posicionXImportado = 0;
+        private double posicionYImportado = 0;
+        private double escalaImportado = 1.0;
+        private double rotacionZImportado = 0;
+
+        public event Action<string, double> PropiedadCambiada;
         /// <summary>
         /// Constructor de la clase Simulador3d
         /// </summary>
@@ -41,8 +52,250 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             InitializeComponent();
             CargarModelosCNC();
             ConfigurarViewport();
+            DibujarMallaMetrica();
 
         }
+
+        /// <summary>
+        /// Configura el control de propiedades interno
+        /// </summary>
+        public void ConfigurarControlPropiedades()
+        {
+            try
+            {
+                if (PropiedadesPieza != null)
+                {
+                    // Asignar referencia de este simulador al control de propiedades
+                    PropiedadesPieza.Simulador3D = this;
+
+                    // Suscribirse a eventos del control de propiedades
+                    PropiedadesPieza.PropiedadCambiada += (propiedad, valor) =>
+                    {
+                        // Disparar el evento hacia MainWindow
+                        PropiedadCambiada?.Invoke(propiedad, valor);
+
+                        // Debug
+                        Console.WriteLine($"Propiedad cambiada desde control: {propiedad} = {valor}");
+                    };
+
+                    // Actualizar estado inicial
+                    ActualizarControlPropiedades();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error configurando control de propiedades: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Actualiza los valores visuales del control de propiedades
+        /// </summary>
+        public void ActualizarControlPropiedades()
+        {
+            try
+            {
+                if (PropiedadesPieza != null)
+                {
+                    // Habilitar/deshabilitar controles según si hay modelo cargado
+                    PropiedadesPieza.SetHabilitado(TieneModeloImportado());
+
+                    // Actualizar valores numéricos
+                    PropiedadesPieza.ActualizarValoresVisuales();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error actualizando control de propiedades: {ex.Message}");
+            }
+        }
+        /// <summary>
+        /// Obtiene si hay un modelo importado cargado
+        /// </summary>
+        /// <returns>True si hay modelo importado cargado</returns>
+        public bool TieneModeloImportado()
+        {
+            return modeloImportado != null;
+        }
+
+        /// <summary>
+        /// Actualiza las propiedades del control de propiedades cuando se carga un modelo
+        /// </summary>
+        public void NotificarModeloCargado()
+        {
+            // Este método puede ser llamado desde MainWindow para actualizar la UI
+            Console.WriteLine("Modelo importado cargado - propiedades actualizadas");
+        }
+        /// <summary>
+        /// Establece la posicion en el eje X del modelo importado
+        /// </summary>
+        /// <param name="posicionX">Posicion en el eje X</param>
+        public void EstablecerPosicionXImportado(double posicionX)
+        {
+            if (modeloImportado != null)
+            {
+                posicionXImportado = posicionX;
+                AplicarTransformacionesImportado();
+                Console.WriteLine($"Posicion X del modelo importado: {posicionX}");
+            }
+        }
+
+        /// <summary>
+        /// Establece la posicion en el eje Y del modelo importado
+        /// </summary>
+        /// <param name="posicionY">Posicion en el eje Y</param>
+        public void EstablecerPosicionYImportado(double posicionY)
+        {
+            if (modeloImportado != null)
+            {
+                posicionYImportado = posicionY;
+                AplicarTransformacionesImportado();
+                Console.WriteLine($"Posicion Y del modelo importado: {posicionY}");
+            }
+        }
+
+        /// <summary>
+        /// Establece la escala del modelo importado en todos los ejes
+        /// </summary>
+        /// <param name="escala">Factor de escala (1.0 = tamaño original)</param>
+        public void EstablecerEscalaImportado(double escala)
+        {
+            if (modeloImportado != null && escala > 0)
+            {
+                escalaImportado = escala;
+                AplicarTransformacionesImportado();
+                Console.WriteLine($"Escala del modelo importado: {escala}");
+            }
+        }
+
+        /// <summary>
+        /// Establece la rotacion del modelo importado sobre el eje Z
+        /// </summary>
+        /// <param name="anguloGrados">Angulo de rotacion en grados</param>
+        public void EstablecerRotacionZImportado(double anguloGrados)
+        {
+            if (modeloImportado != null)
+            {
+                rotacionZImportado = anguloGrados;
+                AplicarTransformacionesImportado();
+                Console.WriteLine($"Rotacion Z del modelo importado: {anguloGrados}°");
+            }
+        }
+
+        /// <summary>
+        /// Aplica todas las transformaciones acumuladas al modelo importado
+        /// </summary>
+        private void AplicarTransformacionesImportado()
+        {
+            if (modeloImportado != null)
+            {
+                var grupoTransformaciones = new Transform3DGroup();
+
+                // Escala
+                grupoTransformaciones.Children.Add(new ScaleTransform3D(escalaImportado, escalaImportado, escalaImportado));
+
+                // Rotacion en Z
+                grupoTransformaciones.Children.Add(new RotateTransform3D(
+                    new AxisAngleRotation3D(new Vector3D(0, 0, 1), rotacionZImportado)));
+
+                // Traslacion
+                grupoTransformaciones.Children.Add(new TranslateTransform3D(
+                    posicionXImportado, posicionYImportado, 0));
+
+                modeloImportado.Transform = grupoTransformaciones;
+            }
+        }
+
+        /// <summary>
+        /// Obtiene la posicion actual en X del modelo importado
+        /// </summary>
+        /// <returns>Posicion actual en el eje X</returns>
+        public double ObtenerPosicionXImportado()
+        {
+            return posicionXImportado;
+        }
+
+        /// <summary>
+        /// Obtiene la posicion actual en Y del modelo importado
+        /// </summary>
+        /// <returns>Posicion actual en el eje Y</returns>
+        public double ObtenerPosicionYImportado()
+        {
+            return posicionYImportado;
+        }
+
+        /// <summary>
+        /// Obtiene la escala actual del modelo importado
+        /// </summary>
+        /// <returns>Factor de escala actual</returns>
+        public double ObtenerEscalaImportado()
+        {
+            return escalaImportado;
+        }
+
+        /// <summary>
+        /// Obtiene la rotacion actual en Z del modelo importado
+        /// </summary>
+        /// <returns>Angulo de rotacion en grados</returns>
+        public double ObtenerRotacionZImportado()
+        {
+            return rotacionZImportado;
+        }
+
+        /// <summary>
+        /// Resetea todas las transformaciones del modelo importado a sus valores por defecto
+        /// </summary>
+        public void ResetearTransformacionesImportado()
+        {
+            posicionXImportado = 0;
+            posicionYImportado = 0;
+            escalaImportado = 1.0;
+            rotacionZImportado = 0;
+            AplicarTransformacionesImportado();
+            Console.WriteLine("Transformaciones del modelo importado reseteadas");
+        }
+        /// <summary>
+        /// Dibuja una malla metrica en el plano Z=0
+        /// </summary>
+        private void DibujarMallaMetrica()
+        {
+            mallaMetrica = new ModelVisual3D();
+            var grupoMalla = new Model3DGroup();
+
+            var materialLineas = new DiffuseMaterial(new SolidColorBrush(Colors.WhiteSmoke));
+            var geometriaLineas = new MeshGeometry3D();
+
+            // Lineas en direccion X (horizontales)
+            for (double y = -TAMANO_MALLA; y <= TAMANO_MALLA; y += ESPACIO_LINEAS)
+            {
+                geometriaLineas.Positions.Add(new Point3D(-TAMANO_MALLA, y, 0));
+                geometriaLineas.Positions.Add(new Point3D(TAMANO_MALLA, y, 0));
+            }
+
+            // Lineas en direccion Y (verticales)
+            for (double x = -TAMANO_MALLA; x <= TAMANO_MALLA; x += ESPACIO_LINEAS)
+            {
+                geometriaLineas.Positions.Add(new Point3D(x, -TAMANO_MALLA, 0));
+                geometriaLineas.Positions.Add(new Point3D(x, TAMANO_MALLA, 0));
+            }
+
+            // Crear indices para las lineas
+            for (int i = 0; i < geometriaLineas.Positions.Count; i += 2)
+            {
+                
+                geometriaLineas.TriangleIndices.Add(i);
+                geometriaLineas.TriangleIndices.Add(i + 1);
+            }
+
+            var modeloLineas = new GeometryModel3D(geometriaLineas, materialLineas);
+            grupoMalla.Children.Add(modeloLineas);
+
+            mallaMetrica.Content = grupoMalla;
+            viewport.Children.Add(mallaMetrica);
+        }
+
+       
+        
 
         /// <summary>
         /// Configura la cámara y viewport 3D
@@ -51,8 +304,8 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         {
             viewport.Camera = new PerspectiveCamera
             {
-                Position = new Point3D(800, 250, 400),
-                LookDirection = new Vector3D(-50, -5, -5),
+                Position = new Point3D(700, 750, 550),
+                LookDirection = new Vector3D(-5, -5, -5),
                 UpDirection = new Vector3D(0, 0, 1),
                 FieldOfView = 60
             };
@@ -218,10 +471,7 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             MoverEjeY(desplazamiento_y);
         }
 
-        /// <summary>
-        /// Importa y carga un modelo STL adicional
-        /// </summary>
-        /// <param name="ruta_archivo">Ruta completa del archivo STL</param>
+        // Modifica el método CargarModeloImportado para actualizar el control
         public void CargarModeloImportado(string ruta_archivo)
         {
             try
@@ -233,17 +483,25 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                     return;
                 }
 
+                // Eliminar modelo anterior si existe
+                if (modeloImportado != null)
+                {
+                    viewport.Children.Remove(modeloImportado);
+                }
+
                 var importador = new ModelImporter();
                 var modelo = importador.Load(ruta_archivo);
 
-                var modelo_importado = new ModelVisual3D();
-                modelo_importado.Content = modelo;
+                modeloImportado = new ModelVisual3D();
+                modeloImportado.Content = modelo;
 
-                // Posición inicial del modelo importado
-                var transformacion = new TranslateTransform3D(2, 2, 0);
-                modelo_importado.Transform = transformacion;
+                // Resetear transformaciones
+                ResetearTransformacionesImportado();
 
-                viewport.Children.Add(modelo_importado);
+                viewport.Children.Add(modeloImportado);
+
+                // Actualizar control de propiedades después de cargar
+                ActualizarControlPropiedades();
 
                 MessageBox.Show($"Modelo STL cargado correctamente:\n{Path.GetFileName(ruta_archivo)}",
                     "Importación Exitosa", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -269,14 +527,48 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                 CargarModeloImportado(dialogo_abrir_archivo.FileName);
             }
         }
-
-        private void ResetVistaClick(object sender, RoutedEventArgs e)
+        // Agrega estos metodos al final de la clase para facilitar el acceso desde botones
+        private void DebugCamaraClick(object sender, RoutedEventArgs e)
         {
-            ConfigurarViewport();
+            MostrarInfoCamara();
+        }
+        public void MostrarInfoCamara()
+        {
+            if (viewport?.Camera is PerspectiveCamera camara)
+            {
+                Console.WriteLine("=== DEBUG CAMARA ===");
+                Console.WriteLine($"Posicion: X={camara.Position.X:F2}, Y={camara.Position.Y:F2}, Z={camara.Position.Z:F2}");
+                Console.WriteLine($"Direccion Mirada: X={camara.LookDirection.X:F2}, Y={camara.LookDirection.Y:F2}, Z={camara.LookDirection.Z:F2}");
+                Console.WriteLine($"Direccion Arriba: X={camara.UpDirection.X:F2}, Y={camara.UpDirection.Y:F2}, Z={camara.UpDirection.Z:F2}");
+                Console.WriteLine($"Campo de Vision: {camara.FieldOfView:F2}°");
+
+                // Calcular punto al que esta mirando
+                Point3D puntoMirada = camara.Position + camara.LookDirection;
+                Console.WriteLine($"Punto de Mirada: X={puntoMirada.X:F2}, Y={puntoMirada.Y:F2}, Z={puntoMirada.Z:F2}");
+
+                // Calcular distancia al punto de mirada
+                double distancia = camara.LookDirection.Length;
+                Console.WriteLine($"Distancia al objetivo: {distancia:F2}");
+                Console.WriteLine("=====================");
+                MessageBox.Show(
+                    $"Posicion: X={camara.Position.X:F2}, Y={camara.Position.Y:F2}, Z={camara.Position.Z:F2} " +
+                    $"\nDireccion Mirada: X={camara.LookDirection.X:F2}, Y={camara.LookDirection.Y:F2}, Z={camara.LookDirection.Z:F2}" +
+                    $"\nDireccion Arriba: X={camara.UpDirection.X:F2}, Y={camara.UpDirection.Y:F2}, Z={camara.UpDirection.Z:F2}" +
+                    $"\nPunto de Mirada: X={puntoMirada.X:F2}, Y={puntoMirada.Y:F2}, Z={puntoMirada.Z:F2}",
+                    "Debug", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            else
+            {
+                Console.WriteLine("Error: No hay camara PerspectiveCamera activa");
+            }
         }
 
         //MEOTOD DE PRUEBA PARA MOVER EJES
-        public void MoverEjesClick(object sender, RoutedEventArgs e)
+        /**
+         * 
+         * 
+         * 
+         *  public void MoverEjesClick(object sender, RoutedEventArgs e)
         {
             var timer = new DispatcherTimer(); // creating a new timer
             timer.Interval = TimeSpan.FromMilliseconds(1); // this timer will trigger every 10 milliseconds
@@ -302,9 +594,19 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             {
                 MoverEjeY(posicionEjeY++);
             }
-           
-           
-        }
+         * 
+         * 
+         * 
+         * 
+         * 
+         * 
+         * 
+         */
+
+
+
+
+
 
     }
 }
