@@ -20,6 +20,8 @@ namespace WPF_CNC_Simulator
             InicializarSlicerService();
         }
 
+
+
         private void InicializarSlicerService()
         {
             try
@@ -277,15 +279,6 @@ namespace WPF_CNC_Simulator
             }
         }
 
-        // Métodos de ejemplo para controlar los modelos
-        private void MoverMaquinaCNC()
-        {
-            Simulador3d.MoverCNC(x: 2.0, y: 1.5, z: 0.3, rotacionZ: 30);
-        }
-
-        private void MoverPiezaImportada()
-        {
-            Simulador3d.MoverModeloImportado(x: 1.0, y: -2.0, z: 0.5, rotacionX: 15);
-        }
+        
     }
 }

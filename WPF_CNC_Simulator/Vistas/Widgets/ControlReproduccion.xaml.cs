@@ -24,5 +24,12 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         {
             InitializeComponent();
         }
+
+        private void boton_prev_Click(object sender, RoutedEventArgs e)
+        {
+            var mainWindow = Window.GetWindow(this) as MainWindow;
+            var simulador = mainWindow?.Simulador3d;
+            simulador?.MoverEjesClick(this,null);
+        }
     }
 }

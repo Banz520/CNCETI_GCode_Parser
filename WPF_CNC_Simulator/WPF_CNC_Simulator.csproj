@@ -13,10 +13,19 @@
     <None Remove="Vistas\Imagenes\hamburger.png" />
     <None Remove="Vistas\Imagenes\import.png" />
     <None Remove="Vistas\Modelos3D\cnceti.stl" />
+    <None Remove="Vistas\Modelos3D\cnc_base.stl" />
+    <None Remove="Vistas\Modelos3D\cnc_eje_x.stl" />
+    <None Remove="Vistas\Modelos3D\cnc_eje_y.stl" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="Vistas\Modelos3D\cnceti.stl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Vistas\Modelos3D\cnc_eje_x.stl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Vistas\Modelos3D\cnc_eje_y.stl">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -45,6 +54,12 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<Link>Slic3r\%(RecursiveDir)%(Filename)%(Extension)</Link>
 		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="Vistas\Modelos3D\cnc_base.stl">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	</ItemGroup>
 
 </Project>

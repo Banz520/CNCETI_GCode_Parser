@@ -5,8 +5,40 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:WPF_CNC_Simulator.Vistas.Widgets"
              mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="800">
-    <Grid>
-            
+             d:DesignHeight="53" d:DesignWidth="284">
+    
+    <Grid Background="{StaticResource PincelGrisEditorGCode}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Button 
+            x:Name="boton_prev"
+            Grid.Column="0"
+            Content="Prev"
+            Background="{StaticResource PincelGrisEditorGCode}"
+            Click="boton_prev_Click"    
+            />
+        <Button 
+            x:Name="boton_pausa"
+            Grid.Column="1"
+            Content="Pause"
+            Background="{StaticResource PincelGrisEditorGCode}"
+            />
+        <Button 
+            x:Name="boton_reproducir"
+            Grid.Column="2"
+            Content="Play"
+            Background="{StaticResource PincelGrisEditorGCode}"
+            />
+        <Button 
+            x:Name="boton_sig"
+            Grid.Column="3"
+            Content="Next"
+            Background="{StaticResource PincelGrisEditorGCode}"
+            />
     </Grid>
 </UserControl>
