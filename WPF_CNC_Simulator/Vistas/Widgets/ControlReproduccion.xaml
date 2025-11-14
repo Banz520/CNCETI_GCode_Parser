@@ -6,7 +6,7 @@
              xmlns:local="clr-namespace:WPF_CNC_Simulator.Vistas.Widgets"
              mc:Ignorable="d" 
              d:DesignHeight="53" d:DesignWidth="284">
-    
+
     <Grid Background="{StaticResource PincelGrisEditorGCode}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
@@ -27,18 +27,21 @@
             Grid.Column="1"
             Content="Pause"
             Background="{StaticResource PincelGrisEditorGCode}"
+            Click="boton_pausa_Click"
             />
         <Button 
             x:Name="boton_reproducir"
             Grid.Column="2"
             Content="Play"
             Background="{StaticResource PincelGrisEditorGCode}"
+            Click="boton_reproducir_Click"
             />
         <Button 
             x:Name="boton_sig"
             Grid.Column="3"
             Content="Next"
             Background="{StaticResource PincelGrisEditorGCode}"
+            Click="boton_sig_Click"
             />
     </Grid>
 </UserControl>

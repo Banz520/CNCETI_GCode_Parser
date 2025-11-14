@@ -24,12 +24,21 @@
             Margin="0 20 0 0"/>
 
 
-        <!-- Viewport 3D de Helix Toolkit -->
+        
         <hx:HelixViewport3D x:Name="viewport" Grid.Row="0" Panel.ZIndex="0">
-            <!-- Luz predeterminada -->
+            
             <hx:DefaultLights/>
+            
+            <hx:GridLinesVisual3D
+                
+                Width="800" 
+                Length="800" 
+                Thickness="0.1" 
+                MinorDistance="10" 
+                MajorDistance="100" 
+                Fill="WhiteSmoke"/>
 
-            <!-- Sistema de coordenadas -->
+            
             <hx:CoordinateSystemVisual3D Visual3D.Transform="{Binding CoordinateSystemTransform}"/>
         </hx:HelixViewport3D>
 
@@ -57,13 +66,7 @@
                 Margin="0 0 0 20"
                 />
 
-            <Button 
-                VerticalAlignment="Bottom"
-                HorizontalAlignment="Right"
-                Content="Debug Camara" 
-                Click="DebugCamaraClick" 
-                Margin="2" 
-                Padding="5"/>
+           
         </Grid>
        
     </Grid>

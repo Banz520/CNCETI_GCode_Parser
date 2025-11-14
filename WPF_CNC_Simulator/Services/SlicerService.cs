@@ -1,36 +1,71 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace WPF_CNC_Simulator.Services
 {
     /// <summary>
-    /// Servicio para convertir archivos STL a G-code para fresadora CNC de 3 ejes
-    /// Configuración: 300x300x150mm, fresa 5mm, madera, 0.1mm precisión
+    /// Servicio Slicer / CAM híbrido:
+    /// - Si se pasa ruta a ejecutable externo y existe, puede intentar usarlo (fallback).
+    /// - Por defecto usa motor CAM interno (waterline + parallel finishing) 100% C# (opción C).
+    ///
+    /// Mantiene compatibilidad con la interfaz previa (SliceSTLAsync, SliceWithCustomSettings).
     /// </summary>
     public class SlicerService
     {
-        private readonly string _slic3rPath;
+        private readonly string _externalSlicerPath;
         private readonly string _configPath;
+        private readonly bool _useExternalSlicer;
+        private readonly CamEngine _cam;
 
-        public SlicerService(string slic3rExecutablePath, string configPath = null)
+        #region Constructors (compatibility)
+
+        // Parameterless: use internal CAM engine
+        public SlicerService()
         {
-            _slic3rPath = slic3rExecutablePath;
-            _configPath = configPath;
-
-            if (!File.Exists(_slic3rPath))
-                throw new FileNotFoundException($"No se encontró Slic3r en: {_slic3rPath}");
+            _useExternalSlicer = false;
+            _externalSlicerPath = null;
+            _configPath = null;
+            _cam = new CamEngine();
         }
 
+        // Old signature compatibility: accepts slic3r path (but will use internal CAM if path is null/invalid)
+        public SlicerService(string slic3rExecutablePath, string configPath = null)
+        {
+            if (!string.IsNullOrEmpty(slic3rExecutablePath) && File.Exists(slic3rExecutablePath))
+            {
+                _externalSlicerPath = slic3rExecutablePath;
+                _configPath = configPath;
+                _useExternalSlicer = true;
+            }
+            else
+            {
+                _useExternalSlicer = false;
+            }
+
+            _cam = new CamEngine();
+        }
+
+        #endregion
+
+        #region Public API (compatible signatures)
+
+        /// <summary>
+        /// Converts STL -> G-code. If external slicer is available, it may be used (fallback).
+        /// Otherwise uses internal CAM engine (waterline + parallel finishing).
+        /// </summary>
         public async Task<SlicingResult> SliceSTLAsync(
             string stlFilePath,
             string outputGcodePath,
             Action<string> progressCallback = null)
         {
             var result = new SlicingResult();
-
             try
             {
                 if (!File.Exists(stlFilePath))
@@ -40,490 +75,294 @@ namespace WPF_CNC_Simulator.Services
                     return result;
                 }
 
-                var outputDir = Path.GetDirectoryName(outputGcodePath);
-                if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
-                    Directory.CreateDirectory(outputDir);
+                var dir = Path.GetDirectoryName(outputGcodePath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
 
-                var stlDirectory = Path.GetDirectoryName(stlFilePath);
-                var stlFileName = Path.GetFileNameWithoutExtension(stlFilePath);
-                var expectedOutputPath = Path.Combine(stlDirectory, stlFileName + ".gcode");
-
-                var arguments = BuildArguments(stlFilePath, outputGcodePath);
-
-                progressCallback?.Invoke($"═══════════════════════════════════════");
-                progressCallback?.Invoke($"CONFIGURACIÓN FRESADORA CNC 3 EJES");
-                progressCallback?.Invoke($"═══════════════════════════════════════");
-                progressCallback?.Invoke($"Área de trabajo: 300x300x150mm");
-                progressCallback?.Invoke($"Herramienta: Fresa Ø5mm");
-                progressCallback?.Invoke($"Precisión: 0.1mm por paso");
-                progressCallback?.Invoke($"Velocidad máx: 10,000 RPM");
-                progressCallback?.Invoke($"Material: Madera");
-                progressCallback?.Invoke($"═══════════════════════════════════════");
-                progressCallback?.Invoke($"Ejecutando: {Path.GetFileName(_slic3rPath)}");
-                progressCallback?.Invoke($"Entrada: {Path.GetFileName(stlFilePath)}");
-                progressCallback?.Invoke($"Salida esperada: {Path.GetFileName(expectedOutputPath)}");
-                progressCallback?.Invoke($"═══════════════════════════════════════");
-
-                var processStartInfo = new ProcessStartInfo
+                if (_useExternalSlicer)
                 {
-                    FileName = _slic3rPath,
-                    Arguments = arguments,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                    WorkingDirectory = Path.GetDirectoryName(stlFilePath)
-                };
+                    progressCallback?.Invoke($"Usando ejecutable externo: {_externalSlicerPath}");
+                    var start = DateTime.Now;
+                    var procResult = await RunExternalSlicer(stlFilePath, outputGcodePath, progressCallback);
+                    result.ProcessingTime = DateTime.Now - start;
+                    result.ExitCode = procResult.exitCode;
+                    result.Output = procResult.stdout;
+                    result.ErrorOutput = procResult.stderr;
 
-                using (var process = new Process { StartInfo = processStartInfo })
-                {
-                    var outputBuilder = new System.Text.StringBuilder();
-                    var errorBuilder = new System.Text.StringBuilder();
-
-                    process.OutputDataReceived += (sender, e) =>
+                    if (procResult.exitCode == 0 && File.Exists(outputGcodePath))
                     {
-                        if (!string.IsNullOrEmpty(e.Data))
-                        {
-                            progressCallback?.Invoke($"[OUT] {e.Data}");
-                            outputBuilder.AppendLine(e.Data);
-                        }
-                    };
-
-                    process.ErrorDataReceived += (sender, e) =>
-                    {
-                        if (!string.IsNullOrEmpty(e.Data))
-                        {
-                            progressCallback?.Invoke($"[INFO] {e.Data}");
-                            errorBuilder.AppendLine(e.Data);
-                        }
-                    };
-
-                    var startTime = DateTime.Now;
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-
-                    var timeout = TimeSpan.FromMinutes(5);
-                    var completed = await Task.Run(() => process.WaitForExit((int)timeout.TotalMilliseconds));
-
-                    if (!completed)
-                    {
-                        process.Kill();
-                        result.Success = false;
-                        result.ErrorMessage = "El proceso excedió el tiempo límite de 5 minutos";
-                        return result;
-                    }
-
-                    result.ProcessingTime = DateTime.Now - startTime;
-                    result.ExitCode = process.ExitCode;
-                    result.Output = outputBuilder.ToString();
-                    result.ErrorOutput = errorBuilder.ToString();
-
-                    progressCallback?.Invoke($"═══════════════════════════════════════");
-                    progressCallback?.Invoke($"Proceso terminado con código: {process.ExitCode}");
-                    progressCallback?.Invoke($"═══════════════════════════════════════");
-
-                    if (process.ExitCode == 0)
-                    {
-                        string foundFile = null;
-
-                        if (File.Exists(expectedOutputPath))
-                        {
-                            foundFile = expectedOutputPath;
-                            progressCallback?.Invoke($"✓ Archivo encontrado en: {expectedOutputPath}");
-                        }
-                        else if (File.Exists(outputGcodePath))
-                        {
-                            foundFile = outputGcodePath;
-                            progressCallback?.Invoke($"✓ Archivo encontrado en: {outputGcodePath}");
-                        }
-                        else
-                        {
-                            var gcodeFiles = Directory.GetFiles(stlDirectory, "*.gcode");
-                            if (gcodeFiles.Length > 0)
-                            {
-                                Array.Sort(gcodeFiles, (a, b) =>
-                                    File.GetLastWriteTime(b).CompareTo(File.GetLastWriteTime(a)));
-                                foundFile = gcodeFiles[0];
-                                progressCallback?.Invoke($"✓ Archivo encontrado (búsqueda): {foundFile}");
-                            }
-                        }
-
-                        if (foundFile != null)
-                        {
-                            if (foundFile != outputGcodePath)
-                            {
-                                try
-                                {
-                                    if (File.Exists(outputGcodePath))
-                                        File.Delete(outputGcodePath);
-                                    File.Move(foundFile, outputGcodePath);
-                                    progressCallback?.Invoke($"→ Archivo movido a: {outputGcodePath}");
-                                }
-                                catch (Exception ex)
-                                {
-                                    progressCallback?.Invoke($"⚠ No se pudo mover el archivo: {ex.Message}");
-                                    outputGcodePath = foundFile;
-                                }
-                            }
-
-                            progressCallback?.Invoke($"═══════════════════════════════════════");
-                            progressCallback?.Invoke($"Post-procesando G-code para fresadora...");
-                            PostProcessGCodeForCNC(outputGcodePath, progressCallback);
-                            progressCallback?.Invoke($"✓ Post-procesamiento completado");
-                            progressCallback?.Invoke($"═══════════════════════════════════════");
-
-                            result.Success = true;
-                            result.OutputFilePath = outputGcodePath;
-                            result.FileSize = new FileInfo(outputGcodePath).Length;
-                            progressCallback?.Invoke($"✓ Conversión exitosa. Tamaño: {result.FileSize / 1024:F2} KB");
-                        }
-                        else
-                        {
-                            result.Success = false;
-                            result.ErrorMessage = "El proceso terminó exitosamente pero no se generó el archivo G-code.";
-                        }
+                        result.Success = true;
+                        result.OutputFilePath = outputGcodePath;
+                        result.FileSize = new FileInfo(outputGcodePath).Length;
+                        progressCallback?.Invoke("Archivo G-code generado por ejecutable externo.");
                     }
                     else
                     {
                         result.Success = false;
-                        result.ErrorMessage = $"Slic3r falló con código de salida: {process.ExitCode}";
-
-                        if (!string.IsNullOrEmpty(result.ErrorOutput))
-                            result.ErrorMessage += $"\n\nDetalles:\n{result.ErrorOutput}";
+                        result.ErrorMessage = "Fallo en ejecutable externo o no se generó archivo G-code.";
                     }
+
+                    return result;
+                }
+                else
+                {
+                    progressCallback?.Invoke("Usando motor CAM interno (Waterline + Parallel Finishing)");
+                    var start = DateTime.Now;
+
+                    // default settings for CAM if none provided later
+                    var defaultSettings = new CNCMillingSettings();
+                    // We'll create waterline (rough) and parallel finishing (finish) and merge
+                    var waterlineLayer = Math.Max(defaultSettings.CuttingDepth, 0.5); // roughing layer
+                    var waterlinePaths = await _cam.GenerateWaterlineRoughingAsync(stlFilePath, waterlineLayer, progressCallback);
+                    var finishingPaths = await _cam.GenerateParallelFinishingAsync(stlFilePath, Math.Max(0.4 * defaultSettings.ToolDiameter, defaultSettings.StepResolution), 'X', null, progressCallback);
+
+                    // Merge paths: rough first then finish
+                    var allPaths = new List<Toolpath>();
+                    allPaths.AddRange(waterlinePaths);
+                    allPaths.AddRange(finishingPaths);
+
+                    var gcode = _cam.GenerateGcode(allPaths, defaultSettings);
+                    File.WriteAllText(outputGcodePath, gcode, Encoding.UTF8);
+
+                    result.ProcessingTime = DateTime.Now - start;
+                    result.Success = true;
+                    result.OutputFilePath = outputGcodePath;
+                    result.FileSize = new FileInfo(outputGcodePath).Length;
+                    result.ExitCode = 0;
+                    progressCallback?.Invoke($"G-code interno generado: {outputGcodePath}");
+                    return result;
                 }
             }
             catch (Exception ex)
             {
                 result.Success = false;
-                result.ErrorMessage = $"Excepción: {ex.Message}";
+                result.ErrorMessage = ex.Message;
                 result.ErrorOutput = ex.StackTrace;
-                progressCallback?.Invoke($"[EXCEPCIÓN] {ex.Message}");
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Post-procesa el G-code para adaptarlo a fresadora CNC con comentarios descriptivos
-        /// </summary>
-        private void PostProcessGCodeForCNC(string gcodeFilePath, Action<string> progressCallback)
-        {
-            try
-            {
-                var lines = File.ReadAllLines(gcodeFilePath);
-                var processedLines = new System.Collections.Generic.List<string>();
-
-                // Agregar encabezado para fresadora CNC
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-                processedLines.Add("; G-CODE PARA FRESADORA CNC DE 3 EJES");
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-                processedLines.Add("; Especificaciones de la máquina:");
-                processedLines.Add(";   • Área de trabajo: 300mm x 300mm x 150mm");
-                processedLines.Add(";   • Herramienta: Fresa de corte Ø5mm");
-                processedLines.Add(";   • Precisión: 0.1mm por paso");
-                processedLines.Add(";   • Velocidad máxima husillo: 10,000 RPM");
-                processedLines.Add(";   • Velocidad de trabajo: 8,000 RPM");
-                processedLines.Add(";   • Material: Madera");
-                processedLines.Add($";   • Generado: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-                processedLines.Add("");
-                processedLines.Add("; ───────────────────────────────────────────────────────────");
-                processedLines.Add("; INICIALIZACIÓN DEL SISTEMA");
-                processedLines.Add("; ───────────────────────────────────────────────────────────");
-                processedLines.Add("G21                     ; Establecer unidades en milímetros");
-                processedLines.Add("G90                     ; Modo de posicionamiento absoluto");
-                processedLines.Add("G17                     ; Seleccionar plano de trabajo XY");
-                processedLines.Add("G94                     ; Velocidad de avance en unidades por minuto");
-                processedLines.Add("");
-                processedLines.Add("; ───────────────────────────────────────────────────────────");
-                processedLines.Add("; POSICIONAMIENTO INICIAL Y SEGURIDAD");
-                processedLines.Add("; ───────────────────────────────────────────────────────────");
-                processedLines.Add("G28                     ; Ejecutar home en todos los ejes (X, Y, Z)");
-                processedLines.Add("G0 Z50.0 F3000.0        ; Subir fresa a altura de seguridad (50mm)");
-                processedLines.Add("");
-                processedLines.Add("; ───────────────────────────────────────────────────────────");
-                processedLines.Add("; ACTIVACIÓN DEL HUSILLO");
-                processedLines.Add("; ───────────────────────────────────────────────────────────");
-                processedLines.Add("M3 S8000                ; Activar husillo en sentido horario a 8000 RPM");
-                processedLines.Add("G4 P2                   ; Pausa de 2 segundos para estabilización del husillo");
-                processedLines.Add("");
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-                processedLines.Add("; INICIO DEL CÓDIGO DE MECANIZADO");
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-                processedLines.Add("");
-
-                bool inCode = false;
-                int lineCounter = 0;
-                int removedLines = 0;
-
-                foreach (var line in lines)
-                {
-                    var trimmedLine = line.Trim();
-
-                    // Omitir líneas vacías y comentarios del encabezado original
-                    if (!inCode && (trimmedLine.StartsWith(";") || string.IsNullOrWhiteSpace(trimmedLine)))
-                        continue;
-
-                    if (!string.IsNullOrWhiteSpace(trimmedLine) && !trimmedLine.StartsWith(";"))
-                        inCode = true;
-
-                    if (inCode)
-                    {
-                        // ELIMINAR COMPLETAMENTE (no comentar) líneas con comandos de impresora 3D
-                        if (trimmedLine.StartsWith("M104") || trimmedLine.StartsWith("M109") ||
-                            trimmedLine.StartsWith("M140") || trimmedLine.StartsWith("M190") ||
-                            trimmedLine.StartsWith("M106") || trimmedLine.StartsWith("M107"))
-                        {
-                            removedLines++;
-                            continue; // SALTAR esta línea completamente
-                        }
-
-                        // ELIMINAR COMPLETAMENTE líneas que contienen parámetro E (extrusión)
-                        if (Regex.IsMatch(trimmedLine, @"\bE[-+]?\d+\.?\d*"))
-                        {
-                            removedLines++;
-                            continue; // SALTAR esta línea completamente
-                        }
-
-                        // Procesar líneas válidas
-                        if (!string.IsNullOrWhiteSpace(trimmedLine))
-                        {
-                            // Si ya es un comentario, mantenerlo
-                            if (trimmedLine.StartsWith(";"))
-                            {
-                                processedLines.Add(trimmedLine);
-                            }
-                            else
-                            {
-                                // Agregar comentario descriptivo al comando
-                                var processedLine = AgregarComentarioDescriptivo(trimmedLine);
-
-                                // Ajustar velocidades si es necesario
-                                processedLine = AjustarVelocidades(processedLine);
-
-                                processedLines.Add(processedLine);
-                                lineCounter++;
-                            }
-                        }
-                    }
-                }
-
-                // Agregar finalización
-                processedLines.Add("");
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-                processedLines.Add("; FINALIZACIÓN DEL MECANIZADO");
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-                processedLines.Add("G0 Z50.0 F3000.0        ; Subir fresa a altura de seguridad");
-                processedLines.Add("M5                      ; Apagar husillo");
-                processedLines.Add("G0 X0 Y0 F3000.0        ; Retornar al punto de origen (home)");
-                processedLines.Add("M2                      ; Fin del programa");
-                processedLines.Add("");
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-                processedLines.Add($"; Fin del G-code - {lineCounter} líneas de mecanizado");
-                processedLines.Add($"; Líneas eliminadas (impresora 3D): {removedLines}");
-                processedLines.Add("; ═══════════════════════════════════════════════════════════");
-
-                // Guardar archivo procesado
-                File.WriteAllLines(gcodeFilePath, processedLines);
-
-                progressCallback?.Invoke($"  → {lineCounter} líneas de mecanizado procesadas");
-                progressCallback?.Invoke($"  → {removedLines} líneas de impresora 3D eliminadas");
-            }
-            catch (Exception ex)
-            {
-                progressCallback?.Invoke($"⚠ Error en post-procesamiento: {ex.Message}");
+                progressCallback?.Invoke("[EXCEPCIÓN] " + ex.Message);
+                return result;
             }
         }
 
         /// <summary>
-        /// Agrega comentario descriptivo a cada comando G-code
+        /// Compatible with previous MainWindow usage: creates a temporary config and calls slicer.
+        /// For internal CAM this simply uses settings passed to generate tailored G-code.
         /// </summary>
-        private string AgregarComentarioDescriptivo(string linea)
-        {
-            // Separar comando de posibles comentarios existentes
-            var partes = linea.Split(new[] { ';' }, 2);
-            var comando = partes[0].Trim();
-
-            if (string.IsNullOrWhiteSpace(comando))
-                return linea;
-
-            // Extraer el código del comando (G0, G1, M3, etc.)
-            var match = Regex.Match(comando, @"^([GM]\d+)");
-            if (!match.Success)
-                return linea; // Si no es un comando reconocido, devolver sin cambios
-
-            var codigo = match.Groups[1].Value;
-            var comentario = ObtenerComentarioParaComando(codigo, comando);
-
-            // Formatear: alinear comando a 24 caracteres y agregar comentario
-            return $"{comando,-24}; {comentario}";
-        }
-
-        /// <summary>
-        /// Obtiene el comentario descriptivo para cada comando
-        /// </summary>
-        private string ObtenerComentarioParaComando(string codigo, string lineaCompleta)
-        {
-            switch (codigo)
-            {
-                // Comandos de movimiento
-                case "G0":
-                    return "Movimiento rápido sin cortar (posicionamiento)";
-                case "G1":
-                    if (lineaCompleta.Contains("Z"))
-                        return "Movimiento lineal de corte (eje Z - profundidad)";
-                    else
-                        return "Movimiento lineal de corte";
-                case "G2":
-                    return "Movimiento circular horario (arco CW)";
-                case "G3":
-                    return "Movimiento circular antihorario (arco CCW)";
-                case "G4":
-                    return "Pausa temporizada";
-
-                // Comandos de configuración
-                case "G17":
-                    return "Seleccionar plano de trabajo XY";
-                case "G18":
-                    return "Seleccionar plano de trabajo ZX";
-                case "G19":
-                    return "Seleccionar plano de trabajo YZ";
-                case "G20":
-                    return "Unidades en pulgadas";
-                case "G21":
-                    return "Unidades en milímetros";
-                case "G28":
-                    return "Retorno a home (punto de referencia)";
-                case "G90":
-                    return "Modo de coordenadas absolutas";
-                case "G91":
-                    return "Modo de coordenadas relativas";
-                case "G92":
-                    return "Establecer posición actual como origen";
-                case "G94":
-                    return "Velocidad de avance en unidades/minuto";
-
-                // Comandos del husillo
-                case "M0":
-                    return "Parada del programa (requiere intervención manual)";
-                case "M1":
-                    return "Parada opcional del programa";
-                case "M2":
-                    return "Fin del programa";
-                case "M3":
-                    return "Activar husillo en sentido horario (CW)";
-                case "M4":
-                    return "Activar husillo en sentido antihorario (CCW)";
-                case "M5":
-                    return "Detener husillo";
-                case "M6":
-                    return "Cambio de herramienta";
-                case "M30":
-                    return "Fin del programa y reinicio";
-
-                default:
-                    return "Comando G-code";
-            }
-        }
-
-        /// <summary>
-        /// Ajusta velocidades de avance para fresado seguro
-        /// </summary>
-        private string AjustarVelocidades(string linea)
-        {
-            var partes = linea.Split(new[] { ';' }, 2);
-            var comando = partes[0].Trim();
-            var comentario = partes.Length > 1 ? partes[1] : "";
-
-            // Buscar y ajustar parámetro F (velocidad de avance)
-            var match = Regex.Match(comando, @"F([-+]?\d+\.?\d*)");
-            if (match.Success)
-            {
-                double velocidad = double.Parse(match.Groups[1].Value);
-                double nuevaVelocidad = velocidad;
-
-                // Limitar velocidades según tipo de movimiento
-                if (comando.StartsWith("G1")) // Movimiento de corte
-                {
-                    if (velocidad > 2000)
-                        nuevaVelocidad = 2000.0;
-                }
-                else if (comando.StartsWith("G0")) // Movimiento rápido
-                {
-                    if (velocidad > 3000)
-                        nuevaVelocidad = 3000.0;
-                }
-
-                if (Math.Abs(velocidad - nuevaVelocidad) > 0.1)
-                {
-                    comando = Regex.Replace(comando, @"F[-+]?\d+\.?\d*", $"F{nuevaVelocidad:F1}");
-                }
-            }
-            else
-            {
-                // Agregar velocidad por defecto si no tiene
-                if (comando.StartsWith("G1") && !comando.Contains("F"))
-                    comando += " F1500.0";
-                else if (comando.StartsWith("G0") && !comando.Contains("F"))
-                    comando += " F3000.0";
-            }
-
-            return string.IsNullOrWhiteSpace(comentario) ? comando : $"{comando} ;{comentario}";
-        }
-
         public async Task<SlicingResult> SliceWithCustomSettings(
             string stlFilePath,
             string outputGcodePath,
             CNCMillingSettings settings,
             Action<string> progressCallback = null)
         {
-            var tempConfigPath = Path.Combine(Path.GetTempPath(), $"slic3r_config_{Guid.NewGuid()}.ini");
-
+            var result = new SlicingResult();
             try
             {
-                File.WriteAllText(tempConfigPath, settings.ToIniFormat());
-                progressCallback?.Invoke($"Configuración CNC temporal creada: {tempConfigPath}");
-
-                var tempService = new SlicerService(_slic3rPath, tempConfigPath);
-                return await tempService.SliceSTLAsync(stlFilePath, outputGcodePath, progressCallback);
-            }
-            finally
-            {
-                if (File.Exists(tempConfigPath))
+                if (!File.Exists(stlFilePath))
                 {
-                    try { File.Delete(tempConfigPath); }
-                    catch { }
+                    result.Success = false;
+                    result.ErrorMessage = "Archivo STL no encontrado.";
+                    return result;
+                }
+
+                var dir = Path.GetDirectoryName(outputGcodePath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+
+                if (_useExternalSlicer)
+                {
+                    progressCallback?.Invoke("Usando ejecutable externo con configuración personalizada (fallback).");
+                    // create temp config if needed
+                    string tempCfg = null;
+                    try
+                    {
+                        if (settings != null)
+                        {
+                            tempCfg = Path.Combine(Path.GetTempPath(), $"slic3r_config_{Guid.NewGuid()}.ini");
+                            File.WriteAllText(tempCfg, settings.ToIniFormat());
+                            progressCallback?.Invoke($"Configuración temporal creada: {tempCfg}");
+                        }
+
+                        var start = DateTime.Now;
+                        var procResult = await RunExternalSlicer(stlFilePath, outputGcodePath, progressCallback, tempCfg);
+                        result.ProcessingTime = DateTime.Now - start;
+                        result.ExitCode = procResult.exitCode;
+                        result.Output = procResult.stdout;
+                        result.ErrorOutput = procResult.stderr;
+
+                        if (procResult.exitCode == 0 && File.Exists(outputGcodePath))
+                        {
+                            // Post-process to convert to CNC-friendly (remove extruder commands...)
+                            PostProcessGCodeForCNC(outputGcodePath, progressCallback);
+                            result.Success = true;
+                            result.OutputFilePath = outputGcodePath;
+                            result.FileSize = new FileInfo(outputGcodePath).Length;
+                        }
+                        else
+                        {
+                            result.Success = false;
+                            result.ErrorMessage = "Fallo en ejecutable externo o no se generó archivo G-code.";
+                        }
+                    }
+                    finally
+                    {
+                        // cleanup temp cfg
+                        try { if (!string.IsNullOrEmpty(tempCfg) && File.Exists(tempCfg)) File.Delete(tempCfg); } catch { }
+                    }
+
+                    return result;
+                }
+                else
+                {
+                    progressCallback?.Invoke("Usando motor CAM interno con configuración personalizada.");
+                    // Use settings to generate waterline + parallel finishing with chosen params
+                    var layer = Math.Max(settings.CuttingDepth, settings.StepResolution);
+                    var waterlinePaths = await _cam.GenerateWaterlineRoughingAsync(stlFilePath, layer, progressCallback);
+
+                    // stepover recommended = 0.4*toolDiameter, but allow override by settings.StepResolution
+                    double stepover = Math.Max(0.4 * settings.ToolDiameter, settings.StepResolution);
+
+                    var finishingPaths = await _cam.GenerateParallelFinishingAsync(stlFilePath, stepover, 'X', null, progressCallback);
+
+                    var allPaths = new List<Toolpath>();
+                    allPaths.AddRange(waterlinePaths);
+                    allPaths.AddRange(finishingPaths);
+
+                    var gcode = _cam.GenerateGcode(allPaths, settings);
+                    File.WriteAllText(outputGcodePath, gcode, Encoding.UTF8);
+
+                    result.Success = true;
+                    result.OutputFilePath = outputGcodePath;
+                    result.FileSize = new FileInfo(outputGcodePath).Length;
+                    result.ExitCode = 0;
+                    result.ProcessingTime = TimeSpan.Zero;
+                    progressCallback?.Invoke($"G-code CAM interno guardado: {outputGcodePath}");
+                    return result;
                 }
             }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.ErrorMessage = ex.Message;
+                result.ErrorOutput = ex.StackTrace;
+                progressCallback?.Invoke("[EXCEPCIÓN] " + ex.Message);
+                return result;
+            }
         }
 
-        private string BuildArguments(string stlFilePath, string outputGcodePath)
+        #endregion
+
+        #region External slicer runner (fallback)
+
+        private Task<(int exitCode, string stdout, string stderr)> RunExternalSlicer(string stl, string output, Action<string> progress = null, string configPath = null)
         {
-            var args = "";
-
-            if (!string.IsNullOrEmpty(_configPath) && File.Exists(_configPath))
+            return Task.Run(() =>
             {
-                args += $"--load \"{_configPath}\" ";
-            }
-            else
-            {
-                args += "--layer-height 0.5 ";
-                args += "--first-layer-height 0.5 ";
-                args += "--perimeters 1 ";
-                args += "--top-solid-layers 0 ";
-                args += "--bottom-solid-layers 1 ";
-                args += "--fill-density 10% ";
-                args += "--fill-pattern rectilinear ";
-                args += "--solid-infill-every-layers 0 ";
-                args += "--fill-angle 45 ";
-            }
+                var sbOut = new StringBuilder();
+                var sbErr = new StringBuilder();
 
-            args += $"\"{stlFilePath}\"";
-            return args;
+                try
+                {
+                    var args = new StringBuilder();
+                    if (!string.IsNullOrEmpty(configPath) && File.Exists(configPath))
+                        args.Append($"--load \"{configPath}\" ");
+                    args.Append($"\"{stl}\" --output \"{output}\"");
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = _externalSlicerPath,
+                        Arguments = args.ToString(),
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        WorkingDirectory = Path.GetDirectoryName(stl)
+                    };
+
+                    using (var p = Process.Start(psi))
+                    {
+                        if (p == null)
+                            return (-1, "", "No se pudo iniciar proceso.");
+
+                        p.OutputDataReceived += (s, e) => { if (e.Data != null) { sbOut.AppendLine(e.Data); progress?.Invoke("[OUT] " + e.Data); } };
+                        p.ErrorDataReceived += (s, e) => { if (e.Data != null) { sbErr.AppendLine(e.Data); progress?.Invoke("[ERR] " + e.Data); } };
+                        p.BeginOutputReadLine();
+                        p.BeginErrorReadLine();
+                        p.WaitForExit(1000 * 60 * 5); // 5 min
+                        return (p.ExitCode, sbOut.ToString(), sbErr.ToString());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return (-1, "", ex.Message + "\n" + ex.StackTrace);
+                }
+            });
         }
+
+        #endregion
+
+        #region PostProcess (compatibility helper)
+
+        /// <summary>
+        /// Post-procesa el g-code (elimina comandos de impresión 3D y ajusta velocidades).
+        /// Compatible con la versión anterior.
+        /// </summary>
+        public void PostProcessGCodeForCNC(string gcodeFilePath, Action<string> progressCallback)
+        {
+            try
+            {
+                var lines = File.Exists(gcodeFilePath) ? File.ReadAllLines(gcodeFilePath).ToList() : new List<string>();
+                var processed = new List<string>();
+
+                // Header
+                processed.Add("; Post-procesado por SlicerService (CAM interno)");
+                processed.Add($" ; Fecha: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                processed.Add("G21");
+                processed.Add("G90");
+                processed.Add("G17");
+                processed.Add("");
+
+                int removed = 0;
+                foreach (var raw in lines)
+                {
+                    var line = raw.Trim();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    // Ignore common 3D-print-only commands
+                    if (line.StartsWith("M104") || line.StartsWith("M109") || line.StartsWith("M140")
+                        || line.StartsWith("M190") || line.StartsWith("M106") || line.StartsWith("M107")
+                        || line.StartsWith("M82") || line.StartsWith("; Filament"))
+                    {
+                        removed++;
+                        continue;
+                    }
+
+                    // Remove extruder E commands
+                    if (Regex.IsMatch(line, @"\bE[-+]?\d+(\.\d+)?"))
+                    {
+                        // remove E parameter
+                        var cleaned = Regex.Replace(line, @"\sE[-+]?\d+(\.\d+)?", "");
+                        processed.Add(cleaned);
+                        removed++;
+                        continue;
+                    }
+
+                    // Keep others
+                    processed.Add(raw);
+                }
+
+                processed.Add($"; Líneas eliminadas específicas de impresión 3D: {removed}");
+                File.WriteAllLines(gcodeFilePath, processed, Encoding.UTF8);
+                progressCallback?.Invoke($"Post-procesado completado. {removed} líneas eliminadas.");
+            }
+            catch (Exception ex)
+            {
+                progressCallback?.Invoke("Error en PostProcessGCodeForCNC: " + ex.Message);
+            }
+        }
+
+        #endregion
     }
+
+    #region Support classes: SlicingResult, CNCMillingSettings (compatible)
 
     public class SlicingResult
     {
@@ -541,31 +380,28 @@ namespace WPF_CNC_Simulator.Services
     {
         public double WorkAreaX { get; set; } = 300.0;
         public double WorkAreaY { get; set; } = 300.0;
-        public double WorkAreaZ { get; set; } = 150.0;
+        public double WorkAreaZ { get; set; } = 100.0;
         public double StepResolution { get; set; } = 0.1;
 
         public double ToolDiameter { get; set; } = 5.0;
         public int MaxSpindleSpeed { get; set; } = 10000;
         public int WorkingSpindleSpeed { get; set; } = 8000;
 
-        public double CuttingDepth { get; set; } = 0.5;
+        public double CuttingDepth { get; set; } = 1.0;
         public double CuttingFeedrate { get; set; } = 1500.0;
         public double PlungeFeedrate { get; set; } = 500.0;
         public double RapidFeedrate { get; set; } = 3000.0;
 
-        public int Perimeters { get; set; } = 1;
-        public int FillDensity { get; set; } = 10;
-        public string FillPattern { get; set; } = "rectilinear";
+        public int Perimeters { get; set; } = 2;
+        public int FillDensity { get; set; } = 50;
+        public string FillPattern { get; set; } = "concentric";
         public double SafeHeight { get; set; } = 50.0;
 
         public string Material { get; set; } = "Madera";
 
         public string ToIniFormat()
         {
-            return $@"; ═══════════════════════════════════════════════════════════
-; Configuración para Fresadora CNC de 3 ejes
-; ═══════════════════════════════════════════════════════════
-
+            return $@"; Temporary config generated by SlicerService
 [print_settings]
 layer_height = {CuttingDepth}
 first_layer_height = {CuttingDepth}
@@ -574,8 +410,7 @@ top_solid_layers = 0
 bottom_solid_layers = 1
 fill_density = {FillDensity}%
 fill_pattern = {FillPattern}
-solid_infill_every_layers = 0
-fill_angle = 45
+solid_infill_every_layers = 1
 infill_speed = {CuttingFeedrate}
 perimeter_speed = {CuttingFeedrate}
 travel_speed = {RapidFeedrate}
@@ -589,28 +424,546 @@ nozzle_diameter = {ToolDiameter}
         }
     }
 
-    public class SlicerSettings : CNCMillingSettings
+    #endregion
+
+    #region CAM Engine (internal): Mesh loader, waterline, parallel finishing, gcode writer
+
+    // Toolpath and PathPoint used by generator
+    public class Toolpath
     {
-        public double LayerHeight
+        public List<PathPoint> Segments { get; set; } = new List<PathPoint>();
+        public double FeedRate { get; set; } = 1500.0;
+        public bool IsRapid { get; set; } = false;
+        public string Comment { get; set; } = "";
+    }
+
+    public class PathPoint
+    {
+        public double X;
+        public double Y;
+        public double Z;
+        public PathPoint(double x, double y, double z) { X = x; Y = y; Z = z; }
+    }
+
+    internal class CamEngine
+    {
+        private readonly CNCMillingSettings _settings;
+        public CamEngine(CNCMillingSettings settings = null)
         {
-            get => CuttingDepth;
-            set => CuttingDepth = value;
+            _settings = settings ?? new CNCMillingSettings();
         }
 
-        public int TopSolidLayers { get; set; } = 0;
-        public int BottomSolidLayers { get; set; } = 1;
-        public double PrintSpeed
+        #region Public CAM methods
+
+        public async Task<List<Toolpath>> GenerateWaterlineRoughingAsync(string stlPath, double layerHeight, Action<string> progress = null)
         {
-            get => CuttingFeedrate;
-            set => CuttingFeedrate = value;
+            return await Task.Run(() =>
+            {
+                var result = new List<Toolpath>();
+                var mesh = StlLoader.Load(stlPath);
+                var bounds = mesh.GetBounds();
+
+                layerHeight = Math.Max(layerHeight, _settings.StepResolution);
+                double topZ = Math.Min(bounds.MaxZ, _settings.WorkAreaZ);
+                double bottomZ = Math.Max(bounds.MinZ, 0.0);
+
+                for (double z = topZ; z >= bottomZ; z -= layerHeight)
+                {
+                    var segs = mesh.IntersectPlaneZ(z);
+                    var polylines = Geometry.ChainSegmentsToPolylines(segs, 1e-3);
+                    foreach (var poly in polylines)
+                    {
+                        var tp = new Toolpath
+                        {
+                            Segments = poly.Select(p => new PathPoint(p.X, p.Y, z)).ToList(),
+                            FeedRate = _settings.CuttingFeedrate,
+                            IsRapid = false,
+                            Comment = $"Waterline Z={z:F3}"
+                        };
+                        result.Add(tp);
+                    }
+                    progress?.Invoke($"Waterline: Z={z:F3} -> {polylines.Count} contours");
+                }
+
+                progress?.Invoke($"Waterline completado: {result.Count} toolpaths");
+                return result;
+            });
         }
-        public double TravelSpeed
+
+        public async Task<List<Toolpath>> GenerateParallelFinishingAsync(string stlPath, double stepover, char direction = 'X', double? finishZ = null, Action<string> progress = null)
         {
-            get => RapidFeedrate;
-            set => RapidFeedrate = value;
+            return await Task.Run(() =>
+            {
+                var result = new List<Toolpath>();
+                var mesh = StlLoader.Load(stlPath);
+                var bounds = mesh.GetBounds();
+
+                stepover = Math.Max(stepover, _settings.StepResolution);
+                double zTarget = finishZ ?? bounds.MaxZ;
+                zTarget = Math.Min(Math.Max(zTarget, bounds.MinZ), bounds.MaxZ);
+
+                if (char.ToUpper(direction) == 'X')
+                {
+                    for (double y = bounds.MinY; y <= bounds.MaxY; y += stepover)
+                    {
+                        var intervals = mesh.IntersectHorizontalLineY(y);
+                        if (intervals.Count == 0) continue;
+
+                        var pts = new List<PathPoint>();
+                        bool leftToRight = ((int)Math.Round((y - bounds.MinY) / stepover) % 2 == 0);
+
+                        var sampleXs = new List<double>();
+                        foreach (var iv in intervals)
+                        {
+                            double sampleStep = Math.Max(_settings.StepResolution, Math.Min(stepover / 6.0, 0.5));
+                            for (double x = iv.Item1; x <= iv.Item2; x += sampleStep)
+                                sampleXs.Add(x);
+                        }
+                        if (!leftToRight) sampleXs.Reverse();
+
+                        foreach (var x in sampleXs)
+                        {
+                            var z = mesh.SampleZAtXY(x, y);
+                            if (double.IsNaN(z)) continue;
+                            pts.Add(new PathPoint(x, y, z));
+                        }
+
+                        if (pts.Count > 1)
+                        {
+                            result.Add(new Toolpath
+                            {
+                                Segments = pts,
+                                FeedRate = _settings.CuttingFeedrate,
+                                IsRapid = false,
+                                Comment = $"Parallel pass Y={y:F3}"
+                            });
+                        }
+                    }
+                }
+                else
+                {
+                    for (double x = bounds.MinX; x <= bounds.MaxX; x += stepover)
+                    {
+                        var intervals = mesh.IntersectVerticalLineX(x);
+                        if (intervals.Count == 0) continue;
+
+                        var pts = new List<PathPoint>();
+                        bool bottomToTop = ((int)Math.Round((x - bounds.MinX) / stepover) % 2 == 0);
+
+                        var sampleYs = new List<double>();
+                        foreach (var iv in intervals)
+                        {
+                            double sampleStep = Math.Max(_settings.StepResolution, Math.Min(stepover / 6.0, 0.5));
+                            for (double y = iv.Item1; y <= iv.Item2; y += sampleStep)
+                                sampleYs.Add(y);
+                        }
+                        if (!bottomToTop) sampleYs.Reverse();
+
+                        foreach (var y in sampleYs)
+                        {
+                            var z = mesh.SampleZAtXY(x, y);
+                            if (double.IsNaN(z)) continue;
+                            pts.Add(new PathPoint(x, y, z));
+                        }
+
+                        if (pts.Count > 1)
+                        {
+                            result.Add(new Toolpath
+                            {
+                                Segments = pts,
+                                FeedRate = _settings.CuttingFeedrate,
+                                IsRapid = false,
+                                Comment = $"Parallel pass X={x:F3}"
+                            });
+                        }
+                    }
+                }
+
+                progress?.Invoke($"Parallel finishing completado: {result.Count} toolpaths");
+                return result;
+            });
         }
-        public int ExtruderTemperature { get; set; } = 0;
-        public int BedTemperature { get; set; } = 0;
-        public bool SupportMaterial { get; set; } = false;
+
+        public string GenerateGcode(IEnumerable<Toolpath> toolpaths, CNCMillingSettings settings = null)
+        {
+            var cfg = settings ?? _settings;
+
+            var sb = new StringBuilder();
+
+            sb.AppendLine($"; G-code generado por SlicerService (Motor CAM interno)");
+            sb.AppendLine($"; Area: {cfg.WorkAreaX}x{cfg.WorkAreaY}x{cfg.WorkAreaZ} mm | Tool: Ø{cfg.ToolDiameter} mm");
+            sb.AppendLine($"; Fecha: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine();
+            sb.AppendLine("G21");
+            sb.AppendLine("G90");
+            sb.AppendLine("G17");
+            sb.AppendLine("G94");
+            sb.AppendLine();
+            sb.AppendLine("G28");
+            sb.AppendLine($"G0 Z{cfg.SafeHeight:F3} F{cfg.RapidFeedrate:F1}");
+            sb.AppendLine();
+            sb.AppendLine($"M3 S{Math.Min(cfg.WorkingSpindleSpeed, cfg.MaxSpindleSpeed)}");
+            sb.AppendLine("G4 P1");
+            sb.AppendLine();
+
+            foreach (var tp in toolpaths)
+            {
+                if (tp?.Segments == null || tp.Segments.Count == 0) continue;
+
+                var first = tp.Segments.First();
+                sb.AppendLine($"; {tp.Comment}");
+                double y0 = -first.Y;
+                sb.AppendLine($"G0 X{first.X:F3} Y{y0:F3} F{cfg.RapidFeedrate:F1}");
+
+                sb.AppendLine($"G0 Z{cfg.SafeHeight:F3} F{cfg.RapidFeedrate:F1}");
+                sb.AppendLine($"G1 Z{first.Z:F3} F{cfg.PlungeFeedrate:F1}");
+
+                foreach (var p in tp.Segments)
+                {
+                    double yInv = -p.Y;   // invertir eje Y
+                    sb.AppendLine($"G1 X{p.X:F3} Y{yInv:F3} Z{p.Z:F3} F{tp.FeedRate:F1}");
+                }
+
+
+                sb.AppendLine($"G0 Z{cfg.SafeHeight:F3} F{cfg.RapidFeedrate:F1}");
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("M5");
+            sb.AppendLine($"G0 Z{_settings.SafeHeight:F3} F{_settings.RapidFeedrate:F1}");
+            sb.AppendLine($"G0 X0 Y0 F{_settings.RapidFeedrate:F1}");
+            sb.AppendLine("M2");
+
+            return sb.ToString();
+        }
+
+        #endregion
     }
+
+    #endregion
+
+    #region Geometry, Mesh, STL Loader (internal lightweight)
+
+    // Basic triangle representation
+    internal class Triangle
+    {
+        public Vector3 A, B, C;
+    }
+
+    internal class Mesh
+    {
+        public List<Triangle> Triangles { get; } = new List<Triangle>();
+
+        public (double MinX, double MaxX, double MinY, double MaxY, double MinZ, double MaxZ) GetBounds()
+        {
+            if (Triangles.Count == 0) return (0, 0, 0, 0, 0, 0);
+            var xs = new List<double>(); var ys = new List<double>(); var zs = new List<double>();
+            foreach (var t in Triangles)
+            {
+                xs.Add(t.A.X); xs.Add(t.B.X); xs.Add(t.C.X);
+                ys.Add(t.A.Y); ys.Add(t.B.Y); ys.Add(t.C.Y);
+                zs.Add(t.A.Z); zs.Add(t.B.Z); zs.Add(t.C.Z);
+            }
+            return (xs.Min(), xs.Max(), ys.Min(), ys.Max(), zs.Min(), zs.Max());
+        }
+
+        // Intersect with plane Z=z0 -> list of 2D segments
+        public List<(Vector2, Vector2)> IntersectPlaneZ(double z0)
+        {
+            var segs = new List<(Vector2, Vector2)>();
+            foreach (var tri in Triangles)
+            {
+                double da = tri.A.Z - z0, db = tri.B.Z - z0, dc = tri.C.Z - z0;
+                // if all same sign and not near zero -> skip
+                if ((da > 1e-12 && db > 1e-12 && dc > 1e-12) || (da < -1e-12 && db < -1e-12 && dc < -1e-12))
+                    continue;
+
+                var pts = new List<Vector2>();
+                TryEdgeIntersect(tri.A, tri.B, z0, pts);
+                TryEdgeIntersect(tri.B, tri.C, z0, pts);
+                TryEdgeIntersect(tri.C, tri.A, z0, pts);
+
+                if (pts.Count >= 2)
+                {
+                    segs.Add((pts[0], pts[1]));
+                }
+            }
+            return segs;
+        }
+
+        private static void TryEdgeIntersect(Vector3 p1, Vector3 p2, double z0, List<Vector2> outPts)
+        {
+            double z1 = p1.Z, z2 = p2.Z;
+            if (Math.Abs(z1 - z2) < 1e-12) return;
+            if ((z1 < z0 && z2 < z0) || (z1 > z0 && z2 > z0)) return;
+            double t = (z0 - z1) / (z2 - z1);
+            if (t < -1e-8 || t > 1 + 1e-8) return;
+            double x = p1.X + t * (p2.X - p1.X);
+            double y = p1.Y + t * (p2.Y - p1.Y);
+            outPts.Add(new Vector2(x, y));
+        }
+
+        // Projected intersections for horizontal/vertical scanlines
+        public List<(double, double)> IntersectHorizontalLineY(double y0)
+        {
+            var xs = new List<double>();
+            foreach (var t in Triangles)
+            {
+                TryEdgeIntersectXY(t.A, t.B, y0, xs);
+                TryEdgeIntersectXY(t.B, t.C, y0, xs);
+                TryEdgeIntersectXY(t.C, t.A, y0, xs);
+            }
+            xs.Sort();
+            var intervals = new List<(double, double)>();
+            for (int i = 0; i + 1 < xs.Count; i += 2)
+                intervals.Add((xs[i], xs[i + 1]));
+            return intervals;
+        }
+
+        private static void TryEdgeIntersectXY(Vector3 p1, Vector3 p2, double y0, List<double> outX)
+        {
+            double y1 = p1.Y, y2 = p2.Y;
+            if (Math.Abs(y1 - y2) < 1e-12) return;
+            if ((y1 < y0 && y2 < y0) || (y1 > y0 && y2 > y0)) return;
+            double t = (y0 - y1) / (y2 - y1);
+            double x = p1.X + t * (p2.X - p1.X);
+            outX.Add(x);
+        }
+
+        public List<(double, double)> IntersectVerticalLineX(double x0)
+        {
+            var ys = new List<double>();
+            foreach (var t in Triangles)
+            {
+                TryEdgeIntersectYX(t.A, t.B, x0, ys);
+                TryEdgeIntersectYX(t.B, t.C, x0, ys);
+                TryEdgeIntersectYX(t.C, t.A, x0, ys);
+            }
+            ys.Sort();
+            var intervals = new List<(double, double)>();
+            for (int i = 0; i + 1 < ys.Count; i += 2)
+                intervals.Add((ys[i], ys[i + 1]));
+            return intervals;
+        }
+
+        private static void TryEdgeIntersectYX(Vector3 p1, Vector3 p2, double x0, List<double> outY)
+        {
+            double x1 = p1.X, x2 = p2.X;
+            if (Math.Abs(x1 - x2) < 1e-12) return;
+            if ((x1 < x0 && x2 < x0) || (x1 > x0 && x2 > x0)) return;
+            double t = (x0 - x1) / (x2 - x1);
+            double y = p1.Y + t * (p2.Y - p1.Y);
+            outY.Add(y);
+        }
+
+        // Sample topmost Z at given (x,y): cast vertical ray
+        public double SampleZAtXY(double x, double y)
+        {
+            double bestZ = double.NaN;
+            foreach (var t in Triangles)
+            {
+                if (RayIntersectsTriangleVertical(x, y, t, out double zHit))
+                {
+                    if (double.IsNaN(bestZ) || zHit > bestZ)
+                        bestZ = zHit;
+                }
+            }
+            return bestZ;
+        }
+
+        private static bool RayIntersectsTriangleVertical(double x, double y, Triangle tri, out double z)
+        {
+            z = double.NaN;
+            var v0 = tri.B - tri.A;
+            var v1 = tri.C - tri.A;
+            var n = Vector3.Cross(v0, v1);
+            if (Math.Abs(n.Z) < 1e-12) return false; // near vertical plane -> ignore
+            z = tri.A.Z - (n.X * (x - tri.A.X) + n.Y * (y - tri.A.Y)) / n.Z;
+            var p = new Vector3(x, y, z);
+            if (PointInTriangle(p, tri.A, tri.B, tri.C)) return true;
+            return false;
+        }
+
+        private static bool PointInTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+        {
+            var normal = Vector3.Cross(b - a, c - a);
+            double absX = Math.Abs(normal.X), absY = Math.Abs(normal.Y), absZ = Math.Abs(normal.Z);
+            int u = 0, v = 1;
+            if (absX > absY && absX > absZ) { u = 1; v = 2; }
+            else if (absY > absZ && absY > absX) { u = 0; v = 2; }
+            else { u = 0; v = 1; }
+
+            double ax = a[u], ay = a[v];
+            double bx_ = b[u], by_ = b[v];
+            double cx_ = c[u], cy_ = c[v];
+            double px = p[u], py = p[v];
+
+            double denom = (by_ - cy_) * (ax - cx_) + (cx_ - bx_) * (ay - cy_);
+            if (Math.Abs(denom) < 1e-12) return false;
+            double w1 = ((by_ - cy_) * (px - cx_) + (cx_ - bx_) * (py - cy_)) / denom;
+            double w2 = ((cy_ - ay) * (px - cx_) + (ax - cx_) * (py - cy_)) / denom;
+            double w3 = 1 - w1 - w2;
+            return (w1 >= -1e-9 && w2 >= -1e-9 && w3 >= -1e-9);
+        }
+    }
+
+    internal struct Vector3
+    {
+        public double X, Y, Z;
+        public Vector3(double x, double y, double z) { X = x; Y = y; Z = z; }
+        public static Vector3 operator -(Vector3 a, Vector3 b) => new Vector3(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+        public static Vector3 Cross(Vector3 a, Vector3 b) => new Vector3(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+        public double this[int idx] => idx == 0 ? X : idx == 1 ? Y : Z;
+    }
+
+    internal struct Vector2
+    {
+        public double X, Y;
+        public Vector2(double x, double y) { X = x; Y = y; }
+    }
+
+    internal static class Geometry
+    {
+        public static List<List<Vector2>> ChainSegmentsToPolylines(List<(Vector2, Vector2)> segments, double tolerance = 1e-3)
+        {
+            var polylines = new List<List<Vector2>>();
+            var used = new bool[segments.Count];
+
+            for (int i = 0; i < segments.Count; i++)
+            {
+                if (used[i]) continue;
+                used[i] = true;
+                var cur = segments[i];
+                var poly = new List<Vector2> { cur.Item1, cur.Item2 };
+                bool extended = true;
+                while (extended)
+                {
+                    extended = false;
+                    for (int j = 0; j < segments.Count; j++)
+                    {
+                        if (used[j]) continue;
+                        var s = segments[j];
+                        if (Distance(poly.Last(), s.Item1) < tolerance)
+                        {
+                            poly.Add(s.Item2); used[j] = true; extended = true;
+                        }
+                        else if (Distance(poly.Last(), s.Item2) < tolerance)
+                        {
+                            poly.Add(s.Item1); used[j] = true; extended = true;
+                        }
+                        else if (Distance(poly.First(), s.Item2) < tolerance)
+                        {
+                            poly.Insert(0, s.Item1); used[j] = true; extended = true;
+                        }
+                        else if (Distance(poly.First(), s.Item1) < tolerance)
+                        {
+                            poly.Insert(0, s.Item2); used[j] = true; extended = true;
+                        }
+                    }
+                }
+                polylines.Add(poly);
+            }
+            return polylines;
+        }
+
+        private static double Distance(Vector2 a, Vector2 b)
+        {
+            var dx = a.X - b.X; var dy = a.Y - b.Y;
+            return Math.Sqrt(dx * dx + dy * dy);
+        }
+    }
+
+    internal static class StlLoader
+    {
+        public static Mesh Load(string path)
+        {
+            var bytes = File.ReadAllBytes(path);
+            if (IsBinary(bytes)) return LoadBinary(bytes);
+            return LoadAscii(File.ReadAllText(path));
+        }
+
+        private static bool IsBinary(byte[] bytes)
+        {
+            if (bytes.Length < 84) return false;
+            // header heuristic
+            var header = Encoding.ASCII.GetString(bytes, 0, Math.Min(80, bytes.Length));
+            if (!header.StartsWith("solid", StringComparison.InvariantCultureIgnoreCase)) return true;
+            // check expected size
+            uint triCount = BitConverter.ToUInt32(bytes, 80);
+            long expected = 84 + triCount * 50;
+            if (expected == bytes.Length) return true;
+            // else assume ASCII
+            return false;
+        }
+
+        private static Mesh LoadBinary(byte[] bytes)
+        {
+            var mesh = new Mesh();
+            if (bytes.Length < 84) return mesh;
+            uint triCount = BitConverter.ToUInt32(bytes, 80);
+            int offset = 84;
+            for (uint i = 0; i < triCount && offset + 50 <= bytes.Length; i++)
+            {
+                // skip normal
+                offset += 12;
+                float ax = BitConverter.ToSingle(bytes, offset); offset += 4;
+                float ay = BitConverter.ToSingle(bytes, offset); offset += 4;
+                float az = BitConverter.ToSingle(bytes, offset); offset += 4;
+
+                float bx = BitConverter.ToSingle(bytes, offset); offset += 4;
+                float by = BitConverter.ToSingle(bytes, offset); offset += 4;
+                float bz = BitConverter.ToSingle(bytes, offset); offset += 4;
+
+                float cx = BitConverter.ToSingle(bytes, offset); offset += 4;
+                float cy = BitConverter.ToSingle(bytes, offset); offset += 4;
+                float cz = BitConverter.ToSingle(bytes, offset); offset += 4;
+
+                offset += 2; // attribute bytes
+
+                mesh.Triangles.Add(new Triangle
+                {
+                    A = new Vector3(ax, ay, az),
+                    B = new Vector3(bx, by, bz),
+                    C = new Vector3(cx, cy, cz)
+                });
+            }
+            return mesh;
+        }
+
+        private static Mesh LoadAscii(string text)
+        {
+            var mesh = new Mesh();
+            using (var sr = new StringReader(text))
+            {
+                string line;
+                Vector3 a = default, b = default, c = default;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    line = line.Trim();
+                    if (line.StartsWith("vertex", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length >= 4)
+                        {
+                            double x = double.Parse(parts[1], CultureInfo.InvariantCulture);
+                            double y = double.Parse(parts[2], CultureInfo.InvariantCulture);
+                            double z = double.Parse(parts[3], CultureInfo.InvariantCulture);
+                            if (a.Equals(default(Vector3))) a = new Vector3(x, y, z);
+                            else if (b.Equals(default(Vector3))) b = new Vector3(x, y, z);
+                            else c = new Vector3(x, y, z);
+                        }
+
+                        if (!a.Equals(default(Vector3)) && !b.Equals(default(Vector3)) && !c.Equals(default(Vector3)))
+                        {
+                            mesh.Triangles.Add(new Triangle { A = a, B = b, C = c });
+                            a = default; b = default; c = default;
+                        }
+                    }
+                }
+            }
+            return mesh;
+        }
+    }
+
+    #endregion
 }
