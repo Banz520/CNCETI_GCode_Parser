@@ -18,10 +18,22 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         // Evento para notificar cuando se aplican cambios
         public event EventHandler<string> GCodeAplicado;
 
+        private BackgroundRenderer _backgroundRenderer;
+        private string _colorComando = "#7FFF00";
+        private string _colorEje = "#00BFFF";
+        private string _colorValor = "#FFA500";
+        private string _colorComentario = "#808080";
+
         public string GCodeTexto
         {
             get => txtGCode.Text;
             set => txtGCode.Text = value ?? string.Empty;
+        }
+
+        public bool EstaHabilitado
+        {
+            get => txtGCode.IsEnabled;
+            set => txtGCode.IsEnabled = value;
         }
 
         public EditorGCode()
@@ -29,25 +41,67 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             InitializeComponent();
             ConfigurarResaltadoGCode();
             txtGCode.Text = "; Editor de Código G\n; Carga o genera un archivo G-code para comenzar\n";
+
+            _backgroundRenderer = new BackgroundRenderer();
+            txtGCode.TextArea.TextView.BackgroundRenderers.Add(_backgroundRenderer);
+
+            txtGCode.PreviewMouseDown += TxtGCode_PreviewMouseDown;
+        }
+
+        private void TxtGCode_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (!txtGCode.IsEnabled)
+            {
+                MessageBox.Show("Debe pausar la animación antes de editar el código G.",
+                    "Animación en progreso", MessageBoxButton.OK, MessageBoxImage.Information);
+                e.Handled = true;
+            }
+        }
+
+        public void ResaltarLinea(int numeroLinea)
+        {
+            if (numeroLinea < 1 || numeroLinea > txtGCode.LineCount)
+                return;
+
+            _backgroundRenderer.LineaActual = numeroLinea;
+            txtGCode.TextArea.TextView.InvalidateVisual();
+
+            // Scroll para que la línea sea visible
+            txtGCode.ScrollToLine(numeroLinea);
+        }
+
+        public void LimpiarResaltado()
+        {
+            _backgroundRenderer.LineaActual = -1;
+            txtGCode.TextArea.TextView.InvalidateVisual();
+        }
+
+        public void ActualizarColoresResaltado(string colorComando, string colorEje, string colorValor, string colorComentario)
+        {
+            _colorComando = colorComando;
+            _colorEje = colorEje;
+            _colorValor = colorValor;
+            _colorComentario = colorComentario;
+
+            ConfigurarResaltadoGCode();
         }
 
         private void ConfigurarResaltadoGCode()
         {
             try
             {
-                // Definición corregida sin caracteres problemáticos en regex
-                string xshd = @"<?xml version=""1.0""?>
+                string xshd = $@"<?xml version=""1.0""?>
 <SyntaxDefinition name=""GCode"" extensions="".gcode;.nc"" xmlns=""http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008"">
-  <Color name=""Command"" foreground=""#7FFF00"" fontWeight=""bold""/>
-  <Color name=""Axis"" foreground=""#00BFFF"" fontWeight=""bold""/>
-  <Color name=""Value"" foreground=""#FFA500""/>
-  <Color name=""Comment"" foreground=""#808080"" fontStyle=""italic""/>
+  <Color name=""Command"" foreground=""{_colorComando}"" fontWeight=""bold""/>
+  <Color name=""Axis"" foreground=""{_colorEje}"" fontWeight=""bold""/>
+  <Color name=""Value"" foreground=""{_colorValor}""/>
+  <Color name=""Comment"" foreground=""{_colorComentario}"" fontStyle=""italic""/>
   
   <RuleSet ignoreCase=""true"">
     <!-- Comentarios con punto y coma -->
     <Span color=""Comment"" begin="";"" />
     
-    <!-- Comentarios entre paréntesis - CORREGIDO -->
+    <!-- Comentarios entre paréntesis -->
     <Span color=""Comment"">
       <Begin>\(</Begin>
       <End>\)</End>
@@ -116,7 +170,6 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             }
             catch (Exception ex)
             {
-                // Si falla el highlighting, el editor sigue funcionando sin colores
                 Console.WriteLine($"Error configurando resaltado de sintaxis: {ex.Message}");
             }
         }

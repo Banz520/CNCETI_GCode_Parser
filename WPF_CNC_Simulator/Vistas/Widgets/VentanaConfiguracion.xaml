@@ -1,0 +1,117 @@
+﻿<Window x:Class="WPF_CNC_Simulator.Vistas.Widgets.VentanaConfiguracion"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configuración" Height="550" Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#2D2D30">
+
+    <Grid Margin="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="20"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="20"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Configuración del Grid -->
+        <GroupBox Grid.Row="0" Header="Configuración del Grid 3D" Foreground="White" BorderBrush="#3E3E42">
+            <StackPanel Margin="10">
+                <TextBlock Text="Resolución del Grid (mm):" Foreground="White" Margin="0,0,0,10"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="txtResolucionGrid" 
+                             Grid.Column="0"
+                             Height="30" 
+                             Background="#3E3E42" 
+                             Foreground="White"
+                             BorderBrush="#555555"
+                             Padding="5"/>
+
+                    <Button x:Name="btnAplicarGrid" 
+                            Grid.Column="2"
+                            Content="Aplicar" 
+                            Width="80" 
+                            Height="30"
+                            Background="#007ACC" 
+                            Foreground="White"
+                            BorderThickness="0"
+                            Click="BtnAplicarGrid_Click"/>
+                </Grid>
+                <TextBlock Text="Rango válido: 1mm - 100mm" 
+                           Foreground="#888888" 
+                           FontSize="10" 
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Configuración de Colores del Editor -->
+        <GroupBox Grid.Row="2" Header="Colores del Editor de G-Code" Foreground="White" BorderBrush="#3E3E42">
+            <StackPanel Margin="10">
+                <!-- Color Comandos -->
+                <TextBlock Text="Color Comandos (G/M):" Foreground="White" Margin="0,0,0,5"/>
+                <ComboBox x:Name="cmbColorComando" 
+                          Height="30" 
+                          Background="#3E3E42" 
+                          Foreground="{StaticResource PincelGrisEditorGCode}"
+                          BorderBrush="#555555"
+                          Margin="0,0,0,10"
+                          />
+
+                <!-- Color Ejes -->
+                <TextBlock Text="Color Ejes (X/Y/Z/F):" Foreground="White" Margin="0,0,0,5"/>
+                <ComboBox x:Name="cmbColorEje" 
+                          Height="30" 
+                          Background="#3E3E42" 
+                          Foreground="{StaticResource PincelGrisEditorGCode}"
+                          BorderBrush="#555555"
+                          Margin="0,0,0,10"/>
+
+                <!-- Color Valores -->
+                <TextBlock Text="Color Valores Numéricos:" Foreground="White" Margin="0,0,0,5"/>
+                <ComboBox x:Name="cmbColorValor" 
+                          Height="30" 
+                          Background="#3E3E42" 
+                          Foreground="{StaticResource PincelGrisEditorGCode}"
+                          BorderBrush="#555555"
+                          Margin="0,0,0,10"/>
+
+                <!-- Color Comentarios -->
+                <TextBlock Text="Color Comentarios:" Foreground="White" Margin="0,0,0,5"/>
+                <ComboBox x:Name="cmbColorComentario" 
+                          Height="30" 
+                          Background="#3E3E42" 
+                          Foreground="{StaticResource PincelGrisEditorGCode}"
+                          BorderBrush="#555555"
+                          Margin="0,0,0,10"/>
+
+                <Button x:Name="btnAplicarColores" 
+                        Content="Aplicar Colores" 
+                        Height="35"
+                        Background="#007ACC" 
+                        Foreground="White"
+                        BorderThickness="0"
+                        Click="BtnAplicarColores_Click"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Botón Cerrar -->
+        <Button x:Name="btnCerrar" 
+                Grid.Row="6"
+                Content="Cerrar" 
+                Height="35"
+                Background="#555555" 
+                Foreground="White"
+                BorderThickness="0"
+                Click="BtnCerrar_Click"
+                Margin="0,10,0,0"/>
+    </Grid>
+</Window>

@@ -99,7 +99,8 @@ namespace WPF_CNC_Simulator.Services
 
             var resultado = new ResultadoEjecucion
             {
-                Comando = comando
+                Comando = comando,
+                NumeroLinea = comando.NumeroLinea // Asignar número de línea al resultado
             };
 
             // Procesar según el tipo de comando
@@ -154,6 +155,7 @@ namespace WPF_CNC_Simulator.Services
             var resultado = new ResultadoEjecucion
             {
                 Comando = comando,
+                NumeroLinea = comando.NumeroLinea, // Asignar número de línea
                 RequiereMovimiento = false
             };
 
@@ -224,11 +226,13 @@ namespace WPF_CNC_Simulator.Services
             var comandos = new List<ComandoGCode>();
             var lineas = codigoG.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
-            foreach (var linea in lineas)
+            for (int i = 0; i < lineas.Length; i++)
             {
+                var linea = lineas[i];
                 var comando = ParsearLinea(linea);
                 if (comando != null)
                 {
+                    comando.NumeroLinea = i + 1; // Asignar número de línea (1-based)
                     comandos.Add(comando);
                 }
             }
@@ -262,9 +266,12 @@ namespace WPF_CNC_Simulator.Services
         public double? Z { get; set; }
         public double? F { get; set; } // Velocidad de avance
 
+        // Nueva propiedad para el número de línea
+        public int NumeroLinea { get; set; }
+
         public override string ToString()
         {
-            return $"{TipoComando}{NumeroComando} X:{X} Y:{Y} Z:{Z} F:{F}";
+            return $"{TipoComando}{NumeroComando} X:{X} Y:{Y} Z:{Z} F:{F} (Línea:{NumeroLinea})";
         }
     }
 
@@ -286,5 +293,8 @@ namespace WPF_CNC_Simulator.Services
         public double PosicionFinalZ { get; set; }
 
         public double DuracionSegundos { get; set; }
+
+        // Nueva propiedad para el número de línea
+        public int NumeroLinea { get; set; }
     }
 }

@@ -22,8 +22,9 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         private ModelVisual3D modeloBase;
         private ModelVisual3D modeloEjeY;
         private ModelVisual3D modeloEjeX;
-        
+
         private ModelVisual3D modeloImportado;
+        private Rect3D boundingBoxModeloOriginal;
 
         private Material materialBase = MaterialHelper.CreateMaterial(Colors.DimGray);
         private Material materialEjeY = MaterialHelper.CreateMaterial(Colors.DarkGray);
@@ -39,8 +40,12 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         private const string RUTA_MODELO_BASE = @"Vistas\Modelos3D\cnc_base.stl";
         private const string RUTA_MODELO_EJE_Y = @"Vistas\Modelos3D\cnc_eje_y.stl";
         private const string RUTA_MODELO_EJE_X = @"Vistas\Modelos3D\cnc_eje_x.stl";
-        
+
         private const int TASA_ACTUALIZACION_MS = 25;
+        private const double ESCALA_MINIMA = 0.01; // 1%
+        private const double ESCALA_MAXIMA = 10.0; // 1000%
+        private const double DIMENSION_MAXIMA_MM = 300.0;
+        private const double DIMENSION_MINIMA_MM = 10.0;
 
         // Variables para animación G-code
         private DispatcherTimer timerAnimacion;
@@ -61,19 +66,26 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         private double minZoomDistance = 200;
         private double maxZoomDistance = 1500;
 
+        // Referencia al EditorGCode
+        private EditorGCode _editorGCode;
+
         // Eventos
         public event Action<string, double> PropiedadCambiada;
 
+        public bool AnimacionEnProgreso => animacionEnProgreso;
+
         // ===== CONSTRUCTOR E INICIALIZACIÓN =====
-        /// <summary>
-        /// Constructor de la clase Simulador3d
-        /// </summary>
         public Simulador3d()
         {
             InitializeComponent();
             CargarModelosCNC();
             ConfigurarViewport();
             InicializarSistemaAnimacion();
+        }
+
+        public void SetEditorGCode(EditorGCode editor)
+        {
+            _editorGCode = editor;
         }
 
         // ===== CONFIGURACIÓN INICIAL =====
@@ -255,6 +267,9 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                 modeloImportado = new ModelVisual3D();
                 modeloImportado.Content = modelo;
 
+                // Calcular bounding box del modelo original
+                boundingBoxModeloOriginal = CalcularBoundingBox(modelo);
+
                 ResetearTransformacionesImportado();
 
                 viewport.Children.Add(modeloImportado);
@@ -269,6 +284,69 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                 MessageBox.Show($"Error cargando modelo STL:\n{ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private Rect3D CalcularBoundingBox(Model3D modelo)
+        {
+            Rect3D bounds = Rect3D.Empty;
+
+            if (modelo is Model3DGroup grupo)
+            {
+                foreach (var hijo in grupo.Children)
+                {
+                    var childBounds = CalcularBoundingBox(hijo);
+                    if (!childBounds.IsEmpty)
+                    {
+                        if (bounds.IsEmpty)
+                            bounds = childBounds;
+                        else
+                            bounds.Union(childBounds);
+                    }
+                }
+            }
+            else if (modelo is GeometryModel3D geoModel && geoModel.Geometry is MeshGeometry3D mesh)
+            {
+                foreach (var pos in mesh.Positions)
+                {
+                    if (bounds.IsEmpty)
+                        bounds = new Rect3D(pos.X, pos.Y, pos.Z, 0, 0, 0);
+                    else
+                        bounds.Union(pos);
+                }
+            }
+
+            return bounds;
+        }
+
+        private bool ValidarDimensionesModelo(double escala)
+        {
+            if (modeloImportado == null || boundingBoxModeloOriginal.IsEmpty)
+                return true;
+
+            double anchoEscalado = boundingBoxModeloOriginal.SizeX * escala;
+            double largoEscalado = boundingBoxModeloOriginal.SizeY * escala;
+
+            // Validar dimensiones máximas
+            if (anchoEscalado > DIMENSION_MAXIMA_MM || largoEscalado > DIMENSION_MAXIMA_MM)
+            {
+                MessageBox.Show($"El modelo excede las dimensiones máximas permitidas (300mm x 300mm).\n\n" +
+                    $"Dimensiones actuales: {anchoEscalado:F2}mm x {largoEscalado:F2}mm\n" +
+                    $"Escala aplicada: {escala * 100:F0}%",
+                    "Dimensiones no válidas", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            // Validar dimensiones mínimas
+            if (anchoEscalado < DIMENSION_MINIMA_MM || largoEscalado < DIMENSION_MINIMA_MM)
+            {
+                MessageBox.Show($"El modelo no alcanza las dimensiones mínimas requeridas (10mm x 10mm).\n\n" +
+                    $"Dimensiones actuales: {anchoEscalado:F2}mm x {largoEscalado:F2}mm\n" +
+                    $"Escala aplicada: {escala * 100:F0}%",
+                    "Dimensiones no válidas", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            return true;
         }
 
         private void MoverModeloImportadoY(double desplazamientoY)
@@ -298,44 +376,67 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         }
 
         // ===== PROPIEDADES DEL MODELO IMPORTADO =====
-        public void EstablecerPosicionXImportado(double posicionX)
+        public bool EstablecerPosicionXImportado(double posicionX)
         {
             if (modeloImportado != null)
             {
                 posicionXImportado = posicionX;
                 AplicarTransformacionesImportado();
                 Console.WriteLine($"Posicion X del modelo importado: {posicionX}");
+                return true;
             }
+            return false;
         }
 
-        public void EstablecerPosicionYImportado(double posicionY)
+        public bool EstablecerPosicionYImportado(double posicionY)
         {
             if (modeloImportado != null && !animacionEnProgreso)
             {
                 posicionYImportado = posicionY;
                 AplicarTransformacionesImportado();
                 Console.WriteLine($"Posicion Y del modelo importado: {posicionY}");
+                return true;
             }
+            return false;
         }
 
-        public void EstablecerEscalaImportado(double escala)
+        public bool EstablecerEscalaImportado(double escala)
         {
-            if (modeloImportado != null && escala > 0)
+            if (modeloImportado != null)
             {
+                // Validar rango de escala (1% a 1000%)
+                if (escala < ESCALA_MINIMA || escala > ESCALA_MAXIMA)
+                {
+                    MessageBox.Show($"La escala debe estar entre {ESCALA_MINIMA * 100:F0}% y {ESCALA_MAXIMA * 100:F0}%.\n\n" +
+                        $"Valor ingresado: {escala * 100:F0}%",
+                        "Escala no válida", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                // Validar dimensiones del modelo con la nueva escala
+                if (!ValidarDimensionesModelo(escala))
+                {
+                    return false;
+                }
+
                 escalaImportado = escala;
                 AplicarTransformacionesImportado();
                 Console.WriteLine($"Escala del modelo importado: {escala}");
+                return true;
             }
+            return false;
         }
 
-        public void EstablecerRotacionZImportado(double anguloGrados)
+        public bool EstablecerRotacionZImportado(double anguloGrados)
         {
             if (modeloImportado != null)
             {
                 rotacionZImportado = anguloGrados;
                 AplicarTransformacionesImportado();
                 Console.WriteLine($"Rotacion Z del modelo importado: {anguloGrados}°");
+                return true;
             }
+            return false;
         }
 
         public void ResetearTransformacionesImportado()
@@ -476,6 +577,12 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                     posicionYImportado = 0;
                 }
 
+                // Deshabilitar editor durante animación
+                if (_editorGCode != null)
+                {
+                    _editorGCode.EstaHabilitado = false;
+                }
+
                 MoverEjes(0, 0);
                 timerAnimacion.Start();
 
@@ -495,6 +602,14 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             {
                 timerAnimacion.Stop();
                 animacionEnProgreso = false;
+
+                // Habilitar editor al pausar
+                if (_editorGCode != null)
+                {
+                    _editorGCode.EstaHabilitado = true;
+                    _editorGCode.LimpiarResaltado();
+                }
+
                 Console.WriteLine("Animación pausada");
             }
         }
@@ -504,6 +619,13 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             if (!animacionEnProgreso && indiceComandoActual < resultadosEjecucion.Count)
             {
                 animacionEnProgreso = true;
+
+                // Deshabilitar editor al reanudar
+                if (_editorGCode != null)
+                {
+                    _editorGCode.EstaHabilitado = false;
+                }
+
                 timerAnimacion.Start();
                 Console.WriteLine("Animación reanudada");
             }
@@ -552,6 +674,12 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
                 }
 
                 var resultadoActual = resultadosEjecucion[indiceComandoActual];
+
+                // Resaltar línea actual en el editor
+                if (_editorGCode != null && resultadoActual.NumeroLinea > 0)
+                {
+                    _editorGCode.ResaltarLinea(resultadoActual.NumeroLinea);
+                }
 
                 if (!resultadoActual.RequiereMovimiento)
                 {
@@ -631,6 +759,13 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             animacionEnProgreso = false;
             duracionMovimientoActual = 0;
 
+            // Habilitar editor y limpiar resaltado
+            if (_editorGCode != null)
+            {
+                _editorGCode.EstaHabilitado = true;
+                _editorGCode.LimpiarResaltado();
+            }
+
             Console.WriteLine("Animación G-code finalizada");
             MessageBox.Show("Simulación de mecanizado completada.",
                 "Finalizado", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -680,10 +815,6 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             }
         }
 
-        // ===== MÉTODOS DE DEBUG Y EVENTOS UI =====
-        
-        
-
         private void ImportarSTLClick(object sender, RoutedEventArgs e)
         {
             var dialogo_abrir_archivo = new OpenFileDialog
@@ -698,6 +829,27 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             }
         }
 
-       
+        // ===== ACTUALIZACIÓN DE GRID =====
+        public void ActualizarResolucionGrid(double minorDistance)
+        {
+            try
+            {
+                // Buscar el GridLinesVisual3D en el viewport
+                foreach (var child in viewport.Children)
+                {
+                    if (child is GridLinesVisual3D grid)
+                    {
+                        grid.MinorDistance = minorDistance;
+                        grid.MajorDistance = minorDistance * 10; // Mayor es 10 veces el menor
+                        Console.WriteLine($"Resolución del grid actualizada: {minorDistance}mm");
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error actualizando resolución del grid: {ex.Message}");
+            }
+        }
     }
 }

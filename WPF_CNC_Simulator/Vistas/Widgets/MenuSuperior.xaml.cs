@@ -25,10 +25,8 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             InitializeComponent();
         }
 
-
         private void BotonImportar_Click(object sender, RoutedEventArgs e)
         {
-            // El evento viene del BotonConIcono, podemos ejecutar nuestra lógica
             var mainWindow = Window.GetWindow(this) as MainWindow;
             mainWindow?.ImportarModeloSTL();
         }
@@ -41,8 +39,24 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
 
         private void BotonConfiguracion_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Funcionalidad de configuración en desarrollo",
-                "Configuración", MessageBoxButton.OK, MessageBoxImage.Information);
+            try
+            {
+                var mainWindow = Window.GetWindow(this) as MainWindow;
+                if (mainWindow != null)
+                {
+                    var ventanaConfiguracion = new VentanaConfiguracion(
+                        mainWindow.Simulador3d,
+                        mainWindow.EditorGCode
+                    );
+                    ventanaConfiguracion.Owner = mainWindow;
+                    ventanaConfiguracion.ShowDialog();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error al abrir configuración:\n{ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
     }
 }

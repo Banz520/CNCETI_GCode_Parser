@@ -23,6 +23,21 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         public PropiedadesPieza()
         {
             InitializeComponent();
+
+            txtEscala.PreviewMouseDown += ValidarAnimacionEnProgreso;
+            txtPosicionX.PreviewMouseDown += ValidarAnimacionEnProgreso;
+            txtPosicionY.PreviewMouseDown += ValidarAnimacionEnProgreso;
+            txtRotacionZ.PreviewMouseDown += ValidarAnimacionEnProgreso;
+        }
+
+        private void ValidarAnimacionEnProgreso(object sender, MouseButtonEventArgs e)
+        {
+            if (Simulador3D != null && Simulador3D.AnimacionEnProgreso)
+            {
+                MessageBox.Show("Debe pausar la animación antes de modificar las propiedades.",
+                    "Animación en progreso", MessageBoxButton.OK, MessageBoxImage.Information);
+                e.Handled = true;
+            }
         }
 
         /// <summary>
@@ -61,29 +76,40 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
             {
                 try
                 {
+                    bool cambioAplicado = false;
+
                     switch (propiedad)
                     {
                         case "Escala":
-                            Simulador3D.EstablecerEscalaImportado(valor);
+                            cambioAplicado = Simulador3D.EstablecerEscalaImportado(valor);
                             break;
                         case "PosicionX":
-                            Simulador3D.EstablecerPosicionXImportado(valor);
+                            cambioAplicado = Simulador3D.EstablecerPosicionXImportado(valor);
                             break;
                         case "PosicionY":
-                            Simulador3D.EstablecerPosicionYImportado(valor);
+                            cambioAplicado = Simulador3D.EstablecerPosicionYImportado(valor);
                             break;
                         case "RotacionZ":
-                            Simulador3D.EstablecerRotacionZImportado(valor);
+                            cambioAplicado = Simulador3D.EstablecerRotacionZImportado(valor);
                             break;
                     }
 
-                    // Disparar evento
-                    PropiedadCambiada?.Invoke(propiedad, valor);
+                    if (cambioAplicado)
+                    {
+                        // Disparar evento
+                        PropiedadCambiada?.Invoke(propiedad, valor);
+                    }
+                    else
+                    {
+                        // Restaurar valor anterior si la validación falló
+                        ActualizarValoresVisuales();
+                    }
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Error al aplicar {propiedad}: {ex.Message}",
                         "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    ActualizarValoresVisuales();
                 }
             }
             else
@@ -125,6 +151,13 @@ namespace WPF_CNC_Simulator.Vistas.Widgets
         {
             if (Simulador3D != null)
             {
+                if (Simulador3D.AnimacionEnProgreso)
+                {
+                    MessageBox.Show("Debe pausar la animación antes de resetear las propiedades.",
+                        "Animación en progreso", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
                 Simulador3D.ResetearTransformacionesImportado();
                 ActualizarValoresVisuales();
                 PropiedadCambiada?.Invoke("Reset", 0);
